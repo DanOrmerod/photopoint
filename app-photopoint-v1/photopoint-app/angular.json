@@ -61,10 +61,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "photopoint-app:build:production"
+              "buildTarget": "photopoint:build:production"
             },
             "development": {
-              "buildTarget": "photopoint-app:build:development"
+              "buildTarget": "photopoint:build:development"
             }
           },
           "defaultConfiguration": "development"

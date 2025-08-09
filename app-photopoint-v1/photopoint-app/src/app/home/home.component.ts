@@ -1,4 +1,7 @@
 import { Component } from '@angular/core';
+import { AuthService } from '../auth/auth.service';
+import { OAuthService } from '../services/oauth.service';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-home',
@@ -161,5 +164,20 @@ import { Component } from '@angular/core';
   `]
 })
 export class HomeComponent {
-  
+  constructor(
+    private authService: AuthService,
+    private oauthService: OAuthService,
+    private router: Router
+  ) {}
+
+  logout(): void {
+    // Clear all tokens
+    this.authService.clearAllTokens();
+    this.oauthService.clearOAuthCache();
+    
+    // Redirect to login
+    this.router.navigate(['/login']);
+    
+    console.log('Logged out from home component');
+  }
 }
