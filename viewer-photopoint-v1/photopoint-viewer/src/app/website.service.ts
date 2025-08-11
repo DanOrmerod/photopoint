@@ -8,10 +8,10 @@ export class WebsiteService {
   constructor(private http: HttpClient) {}
 
   getPublishedWebsite(siteSlug: string): Observable<any> {
-    return this.http.get(`${environment.apiUrl}/websites/published/${siteSlug}`);
+    return this.http.get(`${environment.apiUrl}/websites/website/${siteSlug}`);
   }
 
   getPublishedPage(siteSlug: string, pageSlug: string): Observable<any> {
-    return this.http.get(`${environment.apiUrl}/websites/published/${siteSlug}/pages/${pageSlug}`);
+    return this.http.get(`${environment.apiUrl}/websites/website/${siteSlug}/pages/${pageSlug}`);
   }
 }

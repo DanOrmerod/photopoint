@@ -2,8 +2,7 @@ import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { WebsiteService } from '../../services/website.service';
-import { Page, Website } from '../../models/website.model';
+import { WebsiteService, Page, Website } from '../../services/website.service';
 
 interface DesignBlock {
   id: string;

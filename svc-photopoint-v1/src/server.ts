@@ -30,7 +30,26 @@ app.use(morgan('combined'));
 
 // CORS configuration
 app.use(cors({
-  origin: ['http://localhost:4200', 'http://localhost:3000'],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    
+    // Allow subdomain requests: *.localhost:4300
+    if (/^http:\/\/[a-zA-Z0-9-]+\.localhost:4300$/.test(origin)) {
+      return callback(null, true);
+    }
+    
+    // Allow production subdomains: *.photopoint.studio
+    if (/^https:\/\/[a-zA-Z0-9-]+\.photopoint\.studio$/.test(origin)) {
+      return callback(null, true);
+    }
+    
+    // Allow other local dev origins if needed
+    if (['http://localhost:4200', 'http://localhost:3000', 'http://localhost:4300'].includes(origin)) {
+      return callback(null, true);
+    }
+    
+    return callback(null, true); // Allow all for now during development
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']

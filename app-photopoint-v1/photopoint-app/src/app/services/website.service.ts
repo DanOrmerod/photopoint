@@ -2,14 +2,78 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { AuthService } from '../auth/auth.service';
-import { 
-  Website, 
-  CreateWebsiteRequest,
-  UpdateWebsiteRequest,
-  Page, 
-  CreatePageRequest, 
-  UpdatePageRequest
-} from '../models/website.model';
+
+// Import interfaces from the models
+export interface Website {
+  id: string;
+  name: string;
+  description: string;
+  subdomain: string;
+  customDomain?: string;
+  favicon?: string;
+  status: 'draft' | 'published';
+  theme: string;
+  pageCount?: number;
+  visits?: number;
+  ownerId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Page {
+  id: string;
+  websiteId: string;
+  title: string;
+  slug: string;
+  content: string;
+  metaDescription?: string;
+  isHomePage: boolean;
+  isPublished: boolean;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateWebsiteRequest {
+  name: string;
+  description?: string;
+  subdomain: string;
+  customDomain?: string;
+  theme?: string;
+  templateId?: string;
+}
+
+export interface UpdateWebsiteRequest {
+  name?: string;
+  description?: string;
+  subdomain?: string;
+  customDomain?: string;
+  theme?: string;
+  status?: 'draft' | 'published';
+}
+
+export interface CreatePageRequest {
+  title: string;
+  slug: string;
+  content: string;
+  metaDescription?: string;
+  metaTitle?: string;
+  isHomePage?: boolean;
+  isPublished?: boolean;
+  sortOrder?: number;
+}
+
+export interface UpdatePageRequest {
+  title?: string;
+  slug?: string;
+  content?: string;
+  metaDescription?: string;
+  metaTitle?: string;
+  isHomePage?: boolean;
+  isPublished?: boolean;
+  sortOrder?: number;
+  status?: 'draft' | 'published';
+}
 
 @Injectable({
   providedIn: 'root'
@@ -30,260 +94,135 @@ export class WebsiteService {
     });
   }
 
-  // Mock data for fallback
-  private mockWebsites: Website[] = [
-    {
-      id: '1',
-      name: 'My Portfolio',
-      subdomain: 'portfolio',
-      description: 'Personal portfolio website',
-      status: 'published' as const,
-      theme: 'modern',
-      ownerId: '1',
-      createdAt: new Date('2024-01-10T10:30:00Z'),
-      updatedAt: new Date('2024-01-10T10:30:00Z')
-    },
-    {
-      id: '2',
-      name: 'Business Site',
-      subdomain: 'business',
-      description: 'Corporate business website',
-      status: 'draft' as const,
-      theme: 'corporate',
-      ownerId: '1',
-      createdAt: new Date('2024-01-11T14:20:00Z'),
-      updatedAt: new Date('2024-01-11T14:20:00Z')
-    }
-  ];
-
-  private mockPages: Page[] = [
-    {
-      id: '1',
-      websiteId: '1',
-      title: 'Home',
-      slug: 'home',
-      content: '<h1>Welcome</h1><p>This is the home page content.</p>',
-      metaDescription: 'Welcome to my portfolio website',
-      isHomePage: true,
-      isPublished: true,
-      status: 'published',
-      sortOrder: 1,
-      createdAt: new Date('2024-01-10T10:30:00Z'),
-      updatedAt: new Date('2024-01-10T10:30:00Z')
-    },
-    {
-      id: '2',
-      websiteId: '1',
-      title: 'About',
-      slug: 'about',
-      content: '<h1>About Me</h1><p>Learn more about my background and experience.</p>',
-      metaDescription: 'Learn more about me and my work',
-      isHomePage: false,
-      isPublished: true,
-      status: 'published',
-      sortOrder: 2,
-      createdAt: new Date('2024-01-10T10:35:00Z'),
-      updatedAt: new Date('2024-01-10T10:35:00Z')
-    }
-  ];
-
   // WEBSITE METHODS
   async getWebsites(): Promise<Website[]> {
     try {
-      const response = await this.http.get<{ websites: any[] }>(`${this.apiUrl}/websites`, { headers: this.getHeaders() }).toPromise();
-      if (response && response.websites) {
-        return response.websites.map((w: any) => ({
+      const response = await this.http.get<Website[]>(`${this.apiUrl}/websites`, { headers: this.getHeaders() }).toPromise();
+      if (response && Array.isArray(response)) {
+        return response.map((w: any) => ({
           id: w.id,
           name: w.name,
           description: w.description || '',
           subdomain: w.subdomain,
-          customDomain: w.domain,
-          favicon: w.favicon,
-          status: w.status === 'active' ? 'published' : w.status === 'draft' ? 'draft' : 'archived',
-          theme: w.theme,
+          customDomain: w.customDomain || w.domain || '',
+          favicon: w.favicon || '',
+          status: w.status === 'active' ? 'published' : (w.status || 'draft'),
+          theme: w.theme || 'default',
           pageCount: w.pageCount || 0,
           visits: w.visits || 0,
-          ownerId: w.userId,
+          ownerId: w.userId || w.ownerId,
           createdAt: new Date(w.createdAt),
           updatedAt: new Date(w.updatedAt)
         }));
       }
       return [];
     } catch (error) {
-      console.error('API getWebsites failed:', error);
-      throw new Error('Failed to fetch websites from server');
+      console.error('Failed to fetch websites:', error);
+      throw error;
     }
   }
 
   async getWebsite(id: string): Promise<Website> {
     try {
-      const response = await this.http.get<{ website: any }>(`${this.apiUrl}/websites/${id}`, { headers: this.getHeaders() }).toPromise();
-      if (response && response.website) {
-        const w = response.website;
+      const response = await this.http.get<any>(`${this.apiUrl}/websites/${id}`, { headers: this.getHeaders() }).toPromise();
+      if (response) {
+        const w = response.website || response;
         return {
           id: w.id,
           name: w.name,
           description: w.description || '',
           subdomain: w.subdomain,
-          customDomain: w.domain,
-          favicon: w.favicon,
-          status: w.status === 'active' ? 'published' : w.status === 'draft' ? 'draft' : 'archived',
-          theme: w.theme,
+          customDomain: w.customDomain || w.domain || '',
+          favicon: w.favicon || '',
+          status: w.status === 'active' ? 'published' : (w.status || 'draft'),
+          theme: w.theme || 'default',
           pageCount: w.pageCount || 0,
           visits: w.visits || 0,
-          ownerId: w.userId,
+          ownerId: w.userId || w.ownerId,
           createdAt: new Date(w.createdAt),
           updatedAt: new Date(w.updatedAt)
         };
       }
-      throw new Error('Website not found');
     } catch (error) {
-      console.error('API getWebsite failed:', error);
-      throw new Error('Failed to fetch website from server');
+      console.error('Failed to fetch website:', error);
     }
+    throw new Error('Website not found');
   }
 
   async createWebsite(websiteData: CreateWebsiteRequest): Promise<Website> {
-    console.log('WebsiteService.createWebsite called with:', websiteData);
-    
     try {
-      const response = await this.http.post<{ website: any; message: string }>(`${this.apiUrl}/websites`, websiteData, { headers: this.getHeaders() }).toPromise();
-      
-      if (!response) {
-        throw new Error('No response from API');
+      const response = await this.http.post<Website>(`${this.apiUrl}/websites`, websiteData, { headers: this.getHeaders() }).toPromise();
+      if (response) {
+        return response;
       }
-      
-      console.log('API createWebsite response:', response);
-      
-      if (!response.website) {
-        throw new Error('API response missing website object');
-      }
-      
-      const w = response.website;
-      const website: Website = {
-        id: w.id,
-        name: w.name,
-        description: w.description || '',
-        subdomain: w.subdomain,
-        customDomain: w.domain,
-        favicon: w.favicon,
-        status: w.status === 'active' ? 'published' : w.status === 'draft' ? 'draft' : 'archived',
-        theme: w.theme,
-        pageCount: w.pageCount || 1,
-        visits: w.visits || 0,
-        ownerId: w.userId,
-        createdAt: new Date(w.createdAt),
-        updatedAt: new Date(w.updatedAt)
-      };
-      
-      console.log('Transformed website object:', website);
-      return website;
-      
     } catch (error) {
-      console.error('API createWebsite failed:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to create website: ${errorMessage}`);
+      console.error('Failed to create website:', error);
     }
+    throw new Error('Failed to create website');
   }
 
   async updateWebsite(id: string, websiteData: UpdateWebsiteRequest): Promise<Website> {
     try {
-      // First, update the website
-      const updateResponse = await this.http.put<{ message: string }>(`${this.apiUrl}/websites/${id}`, websiteData, { headers: this.getHeaders() }).toPromise();
-      
-      if (updateResponse && updateResponse.message) {
-        // If update was successful, fetch the updated website
-        const updatedWebsite = await this.getWebsite(id);
-        return updatedWebsite;
+      const response = await this.http.put<Website>(`${this.apiUrl}/websites/${id}`, websiteData, { headers: this.getHeaders() }).toPromise();
+      if (response) {
+        return response;
       }
-      throw new Error('Update response missing success message');
     } catch (error) {
-      console.error('API updateWebsite failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      throw new Error(`Failed to update website: ${errorMessage}`);
+      console.error('Failed to update website:', error);
     }
+    throw new Error('Failed to update website');
   }
 
   async deleteWebsite(id: string): Promise<void> {
     try {
       await this.http.delete(`${this.apiUrl}/websites/${id}`, { headers: this.getHeaders() }).toPromise();
     } catch (error) {
-      console.error('API deleteWebsite failed:', error);
-      throw new Error('Failed to delete website');
+      console.error('Failed to delete website:', error);
+      throw error;
     }
   }
 
-  isValidSubdomain(subdomain: string): boolean {
-    const subdomainRegex = /^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$/;
-    return subdomainRegex.test(subdomain);
-  }
-
-  generateSubdomainSuggestion(name: string): string {
-    // Convert name to a valid subdomain format
-    let suggestion = name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '') // Remove invalid characters
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-      .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
-    
-    // Ensure it's not too long
-    if (suggestion.length > 30) {
-      suggestion = suggestion.substring(0, 30).replace(/-$/, '');
-    }
-    
-    // Ensure it's not empty
-    if (!suggestion) {
-      suggestion = 'website';
-    }
-    
-    return suggestion;
-  }
-
-  async publishWebsite(websiteId: string): Promise<Website> {
+  // PUBLIC API METHODS (for viewer)
+  async getPublicWebsite(domain: string): Promise<Website> {
     try {
-      const response = await this.http.post<{ website: any, message: string }>(`${this.apiUrl}/websites/${websiteId}/publish`, {}, { headers: this.getHeaders() }).toPromise();
-      if (response && response.website) {
-        const w = response.website;
+      const response = await this.http.get<any>(`${this.apiUrl}/public/website/${domain}`).toPromise();
+      if (response) {
+        const w = response;
         return {
           id: w.id,
           name: w.name,
           description: w.description || '',
           subdomain: w.subdomain,
-          customDomain: w.domain,
-          favicon: w.favicon,
-          status: w.status === 'active' ? 'published' : w.status === 'draft' ? 'draft' : 'archived',
-          theme: w.theme,
+          customDomain: w.customDomain || w.domain || '',
+          favicon: w.favicon || '',
+          status: w.status === 'active' ? 'published' : (w.status || 'draft'),
+          theme: w.theme || 'default',
           pageCount: w.pageCount || 0,
           visits: w.visits || 0,
-          ownerId: w.userId,
+          ownerId: w.userId || w.ownerId,
           createdAt: new Date(w.createdAt),
           updatedAt: new Date(w.updatedAt)
         };
       }
-      throw new Error('Publish response missing website data');
     } catch (error) {
-      console.error('API publishWebsite failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      throw new Error(`Failed to publish website: ${errorMessage}`);
+      console.error('Failed to fetch public website:', error);
     }
+    throw new Error('Website not found');
   }
 
-  // PAGE METHODS
-  async getPages(websiteId: string): Promise<Page[]> {
+  async getPublicPages(domain: string): Promise<Page[]> {
     try {
-      const response = await this.http.get<{ pages: any[] }>(`${this.apiUrl}/websites/${websiteId}/pages`, { headers: this.getHeaders() }).toPromise();
-      if (response && response.pages) {
-        return response.pages.map((p: any) => ({
+      const response = await this.http.get<Page[]>(`${this.apiUrl}/public/website/${domain}/pages`).toPromise();
+      if (response && Array.isArray(response)) {
+        return response.map((p: any) => ({
           id: p.id,
           websiteId: p.websiteId,
           title: p.title,
           slug: p.slug,
           content: p.content,
-          metaDescription: p.metaDescription,
+          metaDescription: p.metaDescription || '',
           isHomePage: p.isHomePage || false,
           isPublished: p.status === 'published',
-          status: p.status || 'draft',
           sortOrder: p.sortOrder || 0,
           createdAt: new Date(p.createdAt),
           updatedAt: new Date(p.updatedAt)
@@ -291,8 +230,59 @@ export class WebsiteService {
       }
       return [];
     } catch (error) {
-      console.log('API failed, using mock pages:', error);
-      return this.mockPages.filter(p => p.websiteId === websiteId);
+      console.error('Failed to fetch public pages:', error);
+      throw error;
+    }
+  }
+
+  async getPublicPage(domain: string, slug: string): Promise<Page> {
+    try {
+      const response = await this.http.get<any>(`${this.apiUrl}/public/website/${domain}/page/${slug}`).toPromise();
+      if (response) {
+        const p = response;
+        return {
+          id: p.id,
+          websiteId: p.websiteId,
+          title: p.title,
+          slug: p.slug,
+          content: p.content,
+          metaDescription: p.metaDescription || '',
+          isHomePage: p.isHomePage || false,
+          isPublished: p.status === 'published',
+          sortOrder: p.sortOrder || 0,
+          createdAt: new Date(p.createdAt),
+          updatedAt: new Date(p.updatedAt)
+        };
+      }
+    } catch (error) {
+      console.error('Failed to fetch public page:', error);
+    }
+    throw new Error('Page not found');
+  }
+
+  // PAGE METHODS
+  async getPages(websiteId: string): Promise<Page[]> {
+    try {
+      const response = await this.http.get<Page[]>(`${this.apiUrl}/websites/${websiteId}/pages`, { headers: this.getHeaders() }).toPromise();
+      if (response && Array.isArray(response)) {
+        return response.map((p: any) => ({
+          id: p.id,
+          websiteId: p.websiteId,
+          title: p.title,
+          slug: p.slug,
+          content: p.content,
+          metaDescription: p.metaDescription || '',
+          isHomePage: p.isHomePage || false,
+          isPublished: p.status === 'published',
+          sortOrder: p.sortOrder || 0,
+          createdAt: new Date(p.createdAt),
+          updatedAt: new Date(p.updatedAt)
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch pages:', error);
+      throw error;
     }
   }
 
@@ -300,117 +290,92 @@ export class WebsiteService {
     try {
       const response = await this.http.get<any>(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, { headers: this.getHeaders() }).toPromise();
       if (response) {
-        const p = response.page || response;
+        const p = response;
         return {
           id: p.id,
           websiteId: p.websiteId,
           title: p.title,
           slug: p.slug,
           content: p.content,
-          metaDescription: p.metaDescription,
+          metaDescription: p.metaDescription || '',
           isHomePage: p.isHomePage || false,
           isPublished: p.status === 'published',
-          status: p.status || 'draft',
           sortOrder: p.sortOrder || 0,
           createdAt: new Date(p.createdAt),
           updatedAt: new Date(p.updatedAt)
         };
       }
     } catch (error) {
-      // Fallback to mock data
+      console.error('Failed to fetch page:', error);
     }
-    
-    const mockPage = this.mockPages.find(p => p.websiteId === websiteId && p.id === pageId);
-    if (mockPage) return mockPage;
     throw new Error('Page not found');
   }
 
   async createPage(websiteId: string, pageData: CreatePageRequest): Promise<Page> {
     try {
-      const response = await this.http.post<any>(`${this.apiUrl}/websites/${websiteId}/pages`, pageData, { headers: this.getHeaders() }).toPromise();
+      const response = await this.http.post<Page>(`${this.apiUrl}/websites/${websiteId}/pages`, pageData, { headers: this.getHeaders() }).toPromise();
       if (response) {
-        const p = response.page || response;
-        return {
-          id: p.id,
-          websiteId: p.websiteId,
-          title: p.title,
-          slug: p.slug,
-          content: p.content,
-          metaDescription: p.metaDescription,
-          isHomePage: p.isHomePage || false,
-          isPublished: p.status === 'published',
-          status: p.status || 'draft',
-          sortOrder: p.sortOrder || 0,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt)
-        };
+        return response;
       }
     } catch (error) {
-      // Fallback to mock data creation
+      console.error('Failed to create page:', error);
     }
-    
-    const newPage: Page = {
-      id: (Math.max(...this.mockPages.map(p => parseInt(p.id))) + 1).toString(),
-      websiteId: websiteId,
-      title: pageData.title,
-      slug: pageData.slug || pageData.title.toLowerCase().replace(/\s+/g, '-'),
-      content: pageData.content || '',
-      metaDescription: pageData.metaDescription || '',
-      isHomePage: pageData.isHomePage || false,
-      isPublished: false,
-      status: 'draft',
-      sortOrder: pageData.sortOrder || this.mockPages.length + 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    this.mockPages.push(newPage);
-    return newPage;
+    throw new Error('Failed to create page');
   }
 
   async updatePage(websiteId: string, pageId: string, pageData: UpdatePageRequest): Promise<Page> {
     try {
-      const response = await this.http.put<any>(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, pageData, { headers: this.getHeaders() }).toPromise();
+      const response = await this.http.put<Page>(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, pageData, { headers: this.getHeaders() }).toPromise();
       if (response) {
-        const p = response.page || response;
-        return {
-          id: p.id,
-          websiteId: p.websiteId,
-          title: p.title,
-          slug: p.slug,
-          content: p.content,
-          metaDescription: p.metaDescription,
-          isHomePage: p.isHomePage || false,
-          isPublished: p.status === 'published',
-          status: p.status || 'draft',
-          sortOrder: p.sortOrder || 0,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt)
-        };
+        return response;
       }
     } catch (error) {
-      // Fallback to mock data update
+      console.error('Failed to update page:', error);
     }
-    
-    const pageIndex = this.mockPages.findIndex(p => p.websiteId === websiteId && p.id === pageId);
-    if (pageIndex !== -1) {
-      this.mockPages[pageIndex] = {
-        ...this.mockPages[pageIndex],
-        ...pageData,
-        updatedAt: new Date()
-      };
-      return this.mockPages[pageIndex];
-    }
-    throw new Error('Page not found');
+    throw new Error('Failed to update page');
   }
 
   async deletePage(websiteId: string, pageId: string): Promise<void> {
     try {
       await this.http.delete(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, { headers: this.getHeaders() }).toPromise();
     } catch (error) {
-      const pageIndex = this.mockPages.findIndex(p => p.websiteId === websiteId && p.id === pageId);
-      if (pageIndex !== -1) {
-        this.mockPages.splice(pageIndex, 1);
-      }
+      console.error('Failed to delete page:', error);
+      throw error;
     }
+  }
+
+  // TEMPLATE METHODS
+  async getTemplates() {
+    // This would be a separate API call in real implementation
+    return [
+      { id: '1', name: 'Simple Business', description: 'Clean and professional template' },
+      { id: '2', name: 'Creative Portfolio', description: 'Showcase your work' },
+      { id: '3', name: 'Blog Template', description: 'Perfect for content creators' }
+    ];
+  }
+
+  // UTILITY METHODS
+  generateSubdomainSuggestion(name: string): string {
+    return name.toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 30);
+  }
+
+  isValidSubdomain(subdomain: string): boolean {
+    const subdomainRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+    return subdomain.length >= 2 && 
+           subdomain.length <= 63 && 
+           subdomainRegex.test(subdomain) &&
+           !subdomain.includes('--');
+  }
+
+  async publishWebsite(id: string): Promise<Website> {
+    return this.updateWebsite(id, { status: 'published' });
+  }
+
+  async unpublishWebsite(id: string): Promise<Website> {
+    return this.updateWebsite(id, { status: 'draft' });
   }
 }

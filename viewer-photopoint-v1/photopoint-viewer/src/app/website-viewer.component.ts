@@ -24,25 +24,44 @@ export class WebsiteViewerComponent implements OnInit {
   error: string | null = null;
 
   ngOnInit() {
+    // Extract domain from current URL
+    const domain = this.extractDomainFromUrl();
+    
     this.route.paramMap.subscribe(params => {
-      const siteSlug = params.get('siteSlug');
-      const pageSlug = params.get('pageSlug');
+      const pageSlug = params.get('pageSlug') || params.get('siteSlug'); // Handle both route patterns
       this.loading = true;
       this.error = null;
-      if (siteSlug && pageSlug) {
-        this.websiteService.getPublishedPage(siteSlug, pageSlug).subscribe({
+      
+      if (pageSlug && pageSlug !== 'home') {
+        // Load specific page
+        this.websiteService.getPublishedPage(domain, pageSlug).subscribe({
           next: (data) => { this.website = data; this.loading = false; },
           error: (err) => { this.error = 'Page not found.'; this.loading = false; }
         });
-      } else if (siteSlug) {
-        this.websiteService.getPublishedWebsite(siteSlug).subscribe({
+      } else {
+        // Load home page or website
+        this.websiteService.getPublishedWebsite(domain).subscribe({
           next: (data) => { this.website = data; this.loading = false; },
           error: (err) => { this.error = 'Website not found.'; this.loading = false; }
         });
-      } else {
-        this.error = 'Invalid URL.';
-        this.loading = false;
       }
     });
+  }
+
+  private extractDomainFromUrl(): string {
+    const hostname = window.location.hostname;
+    
+    // For local development: extract subdomain from examplename.localhost
+    if (hostname.includes('.localhost')) {
+      return hostname.split('.')[0];
+    }
+    
+    // For production: check if it's a photopoint.studio subdomain
+    if (hostname.includes('.photopoint.studio')) {
+      return hostname.split('.')[0];
+    }
+    
+    // For custom domains: use the full hostname
+    return hostname;
   }
 }

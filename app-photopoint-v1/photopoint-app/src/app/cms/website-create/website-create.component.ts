@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { WebsiteService } from '../../services/website.service';
-import { CreateWebsiteRequest } from '../../models/website.model';
+import { CreateWebsiteRequest } from '../../services/website.service';
 import { TemplateService, Template } from '../../services/template.service';
 import { TemplateSelectorComponent } from '../template-selector/template-selector.component';
 import { environment } from '../../../environments/environment';

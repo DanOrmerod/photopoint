@@ -46,6 +46,7 @@ BEGIN
         [WebsiteId] UNIQUEIDENTIFIER NOT NULL,
         [Title] NVARCHAR(255) NOT NULL,
         [Slug] NVARCHAR(255) NOT NULL,
+        [IsHomePage] BIT NOT NULL DEFAULT 0,
         [Content] NVARCHAR(MAX) NULL, -- JSON content blocks
         [MetaTitle] NVARCHAR(255) NULL,
         [MetaDescription] NVARCHAR(500) NULL,

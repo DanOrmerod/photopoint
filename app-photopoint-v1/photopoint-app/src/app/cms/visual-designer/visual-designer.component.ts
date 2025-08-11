@@ -5,7 +5,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { WebsiteService } from '../../services/website.service';
 import { ThemeService, Theme } from '../../services/theme.service';
 import { ThemeCustomizerComponent } from '../theme-customizer/theme-customizer.component';
-import { Page, Website } from '../../models/website.model';
+import { Page, Website } from '../../services/website.service';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 interface DesignBlock {

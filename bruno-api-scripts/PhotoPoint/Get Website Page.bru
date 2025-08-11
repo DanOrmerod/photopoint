@@ -1,0 +1,15 @@
+meta {
+  name: Get Website Page
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://localhost:3001/api/v1/websites/website/dianjelo-photography
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

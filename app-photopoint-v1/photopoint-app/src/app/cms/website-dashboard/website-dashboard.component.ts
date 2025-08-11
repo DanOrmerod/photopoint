@@ -4,7 +4,7 @@ import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { WebsiteService } from '../../services/website.service';
 import { TemplateService, Template } from '../../services/template.service';
 import { TemplateSelectorComponent } from '../template-selector/template-selector.component';
-import { Website, Page } from '../../models/website.model';
+import { Website, Page } from '../../services/website.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -413,7 +413,8 @@ export class WebsiteDashboardComponent implements OnInit {
     try {
       const newPage = await this.websiteService.createPage(this.websiteId, {
         title: 'New Page',
-        slug: 'new-page-' + Date.now()
+        slug: 'new-page-' + Date.now(),
+        content: '<h1>New Page</h1><p>Add your content here...</p>'
       });
       this.router.navigate(['/websites', this.websiteId, 'pages', newPage.id, 'edit']);
     } catch (error) {
