@@ -18,12 +18,8 @@ export class WebsiteController {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
-
-      console.log('Fetching websites for user:', userId);
       
       const websites = await this.websiteRepo.findByUserId(userId);
-      
-      console.log(`Found ${websites.length} websites for user ${userId}`);
       res.json(websites);
     } catch (error) {
       console.error('Error fetching websites:', error);
@@ -41,8 +37,6 @@ export class WebsiteController {
         return;
       }
 
-      console.log('Fetching website:', { id, userId });
-
       const website = await this.websiteRepo.findById(id, userId);
       
       if (!website) {
@@ -50,7 +44,6 @@ export class WebsiteController {
         return;
       }
 
-      console.log('Found website:', website.name);
       res.json(website);
     } catch (error) {
       console.error('Error fetching website:', error);
@@ -66,18 +59,22 @@ export class WebsiteController {
         return;
       }
 
-      const { name, subdomain, theme } = req.body as CreateWebsiteData;
+      const { name, subdomain, theme, description, customDomain, templateId } = req.body as CreateWebsiteData;
 
       if (!name || !subdomain) {
         res.status(400).json({ error: 'Name and subdomain are required' });
         return;
       }
 
-      console.log('Creating website:', { name, subdomain, theme, userId });
+      const website = await this.websiteRepo.create(userId, { 
+        name, 
+        subdomain, 
+        theme, 
+        description, 
+        customDomain, 
+        templateId 
+      });
 
-      const website = await this.websiteRepo.create(userId, { name, subdomain, theme });
-
-      console.log('Created website:', website.id);
       res.status(201).json(website);
     } catch (error) {
       console.error('Error creating website:', error);
@@ -201,7 +198,16 @@ export class WebsiteController {
         theme: websiteData.theme,
         settings: websiteData.settings || {},
         lastPublishedAt: websiteData.lastPublishedAt,
-        pages: pages
+        pages: pages.map(page => ({
+          id: page.id,
+          title: page.title,
+          slug: page.slug,
+          html: page.content, // Return rendered HTML for viewer
+          metaTitle: page.metaTitle,
+          metaDescription: page.metaDescription,
+          isHomePage: page.isHomePage,
+          sortOrder: page.sortOrder
+        }))
       };
 
       console.log('PUBLIC: Found website with', response.pages.length, 'published pages');
@@ -226,7 +232,20 @@ export class WebsiteController {
       }
 
       console.log('PUBLIC: Found published page:', page.title);
-      res.json(page);
+      
+      // Return page with rendered HTML for viewer
+      const response = {
+        id: page.id,
+        title: page.title,
+        slug: page.slug,
+        html: page.content, // Return rendered HTML for viewer
+        metaTitle: page.metaTitle,
+        metaDescription: page.metaDescription,
+        isHomePage: page.isHomePage,
+        website: page.website
+      };
+      
+      res.json(response);
     } catch (error) {
       console.error('PUBLIC: Error fetching published page:', error);
       res.status(500).json({ error: 'Internal server error' });

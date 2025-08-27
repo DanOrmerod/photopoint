@@ -11,6 +11,9 @@ export interface Website {
   status: 'draft' | 'active' | 'inactive' | 'suspended';
   theme: string;
   settings?: any;
+  description?: string; // Extracted from settings
+  customDomain?: string; // Mapped from domain
+  templateId?: string; // Extracted from settings
   createdAt: string;
   updatedAt: string;
   lastPublishedAt?: string;
@@ -21,6 +24,9 @@ export interface CreateWebsiteData {
   name: string;
   subdomain: string;
   theme?: string;
+  description?: string;
+  customDomain?: string;
+  templateId?: string;
 }
 
 export interface UpdateWebsiteData {
@@ -59,20 +65,26 @@ export class WebsiteRepository {
         ORDER BY w.CreatedAt DESC
       `);
 
-    return result.recordset.map(row => ({
-      id: row.Id,
-      userId: row.UserId,
-      name: row.Name,
-      domain: row.Domain,
-      subdomain: row.Subdomain,
-      status: row.Status,
-      theme: row.Theme,
-      settings: row.Settings ? JSON.parse(row.Settings) : null,
-      createdAt: row.CreatedAt,
-      updatedAt: row.UpdatedAt,
-      lastPublishedAt: row.lastPublishedAt,
-      pageCount: row.pageCount || 0
-    }));
+    return result.recordset.map(row => {
+      const settings = row.Settings ? JSON.parse(row.Settings) : {};
+      return {
+        id: row.Id,
+        userId: row.UserId,
+        name: row.Name,
+        domain: row.Domain,
+        subdomain: row.Subdomain,
+        status: row.Status,
+        theme: row.Theme,
+        settings: settings,
+        description: settings.description || '',
+        customDomain: row.Domain || '',
+        templateId: settings.templateId,
+        createdAt: row.CreatedAt,
+        updatedAt: row.UpdatedAt,
+        lastPublishedAt: row.lastPublishedAt,
+        pageCount: row.pageCount || 0
+      };
+    });
   }
 
   async findById(id: string, userId: string): Promise<Website | null> {
@@ -106,6 +118,7 @@ export class WebsiteRepository {
     }
 
     const row = result.recordset[0];
+    const settings = row.Settings ? JSON.parse(row.Settings) : {};
     return {
       id: row.Id,
       userId: row.UserId,
@@ -114,7 +127,10 @@ export class WebsiteRepository {
       subdomain: row.Subdomain,
       status: row.Status,
       theme: row.Theme,
-      settings: row.Settings ? JSON.parse(row.Settings) : null,
+      settings: settings,
+      description: settings.description || '',
+      customDomain: row.Domain || '',
+      templateId: settings.templateId,
       createdAt: row.CreatedAt,
       updatedAt: row.UpdatedAt,
       lastPublishedAt: row.lastPublishedAt,
@@ -151,6 +167,7 @@ export class WebsiteRepository {
     }
 
     const row = result.recordset[0];
+    const settings = row.Settings ? JSON.parse(row.Settings) : {};
     return {
       id: row.Id,
       userId: row.UserId,
@@ -159,7 +176,10 @@ export class WebsiteRepository {
       subdomain: row.Subdomain,
       status: row.Status,
       theme: row.Theme,
-      settings: row.Settings ? JSON.parse(row.Settings) : null,
+      settings: settings,
+      description: settings.description || '',
+      customDomain: row.Domain || '',
+      templateId: settings.templateId,
       createdAt: row.CreatedAt,
       updatedAt: row.UpdatedAt,
       lastPublishedAt: row.LastPublishedAt
@@ -170,15 +190,26 @@ export class WebsiteRepository {
     const pool = await getDbConnection();
     const websiteId = uuidv4();
     
+    // Prepare settings object with optional fields
+    const settings: any = {};
+    if (data.description) {
+      settings.description = data.description;
+    }
+    if (data.templateId) {
+      settings.templateId = data.templateId;
+    }
+    
     await pool.request()
       .input('id', sql.UniqueIdentifier, websiteId)
       .input('userId', sql.UniqueIdentifier, userId)
       .input('name', sql.NVarChar, data.name)
+      .input('domain', sql.NVarChar, data.customDomain || null)
       .input('subdomain', sql.NVarChar, data.subdomain)
       .input('theme', sql.NVarChar, data.theme || 'default')
+      .input('settings', sql.NVarChar, JSON.stringify(settings))
       .query(`
         INSERT INTO Websites (Id, UserId, Name, Domain, Subdomain, Status, Theme, Settings, CreatedAt, UpdatedAt)
-        VALUES (@id, @userId, @name, NULL, @subdomain, 'draft', @theme, '{}', GETUTCDATE(), GETUTCDATE())
+        VALUES (@id, @userId, @name, @domain, @subdomain, 'draft', @theme, @settings, GETUTCDATE(), GETUTCDATE())
       `);
 
     const created = await this.findById(websiteId, userId);

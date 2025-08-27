@@ -138,6 +138,40 @@ BEGIN
     PRINT 'WebsiteMedia table already exists.';
 END
 
+-- Create Templates table for storing website templates
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Templates]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[Templates] (
+        [Id] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+        [Name] NVARCHAR(255) NOT NULL,
+        [Description] NVARCHAR(1000) NULL,
+        [Category] NVARCHAR(100) NOT NULL DEFAULT 'general', -- general, business, portfolio, blog, etc.
+        [PreviewImage] NVARCHAR(500) NULL,
+        [HtmlTemplate] NVARCHAR(MAX) NOT NULL, -- Complete HTML template with placeholders
+        [CssStyles] NVARCHAR(MAX) NOT NULL, -- CSS styles for the template
+        [JsScripts] NVARCHAR(MAX) NULL, -- Optional JavaScript for the template
+        [Settings] NVARCHAR(MAX) NULL, -- JSON template configuration
+        [IsActive] BIT NOT NULL DEFAULT 1,
+        [IsPremium] BIT NOT NULL DEFAULT 0,
+        [CreatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        [UpdatedAt] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        
+        CONSTRAINT [PK_Templates] PRIMARY KEY CLUSTERED ([Id] ASC),
+        CONSTRAINT [UQ_Templates_Name] UNIQUE NONCLUSTERED ([Name] ASC)
+    );
+
+    -- Create indexes
+    CREATE NONCLUSTERED INDEX [IX_Templates_Category] ON [dbo].[Templates] ([Category] ASC);
+    CREATE NONCLUSTERED INDEX [IX_Templates_IsActive] ON [dbo].[Templates] ([IsActive] ASC);
+    CREATE NONCLUSTERED INDEX [IX_Templates_IsPremium] ON [dbo].[Templates] ([IsPremium] ASC);
+    
+    PRINT 'Templates table created successfully.';
+END
+ELSE
+BEGIN
+    PRINT 'Templates table already exists.';
+END
+
 -- Add sample data
 IF NOT EXISTS (SELECT * FROM [dbo].[Websites])
 BEGIN

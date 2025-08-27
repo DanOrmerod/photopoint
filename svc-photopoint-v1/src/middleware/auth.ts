@@ -30,24 +30,19 @@ export interface AuthenticatedRequest extends Request {
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const authHeader = req.headers['authorization'];
-    console.log('AUTH: Authorization header:', authHeader);
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-    console.log('AUTH: Extracted token:', token ? `${token.substring(0, 20)}...` : 'null');
 
     if (!token) {
-      console.log('AUTH: No token provided');
       res.status(401).json({ error: 'Access token required' });
       return;
     }
 
-    console.log('AUTH: Verifying token with JWT_SECRET');
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'devsecret') as any;
-    console.log('AUTH: Token decoded successfully:', { id: decoded.id, email: decoded.email });
     
     // Fetch user from database to ensure they still exist and are active
     const connection = await getDbConnection();
     const result = await connection.request()
-      .input('userId', sql.UniqueIdentifier, decoded.id) // Changed from decoded.userId to decoded.id
+      .input('userId', sql.UniqueIdentifier, decoded.id)
       .query(`
         SELECT Id, Email, Username, FullName, ProfilePicture, IsActive
         FROM Users 
