@@ -38,6 +38,9 @@ export interface MediaFile {
   width?: number;
   height?: number;
   durationSeconds?: number;
+  thumbnailUrl?: string;
+  thumbnailBlobPath?: string;
+  hasThumbnail?: boolean;
   tags?: string[];
   altText?: string;
   description?: string;
@@ -294,6 +297,50 @@ export class MediaRepository {
     }));
   }
 
+  async getFile(userId: string, fileId: string): Promise<MediaFile | null> {
+    const pool = await getDbConnection();
+    const request = new Request(pool);
+    
+    const result = await request
+      .input('fileId', fileId)
+      .input('userId', userId)
+      .query(`
+        SELECT 
+          id, folder_id, user_id, original_name, file_name, blob_path, blob_url,
+          file_size, mime_type, file_type, width, height, duration_seconds,
+          tags, alt_text, description, is_public, created_at, updated_at
+        FROM media_files
+        WHERE id = @fileId AND user_id = @userId AND is_deleted = 0
+      `);
+
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    const row = result.recordset[0];
+    return {
+      id: row.id,
+      folderId: row.folder_id,
+      userId: row.user_id,
+      originalName: row.original_name,
+      fileName: row.file_name,
+      blobPath: row.blob_path,
+      blobUrl: row.blob_url,
+      fileSize: row.file_size,
+      mimeType: row.mime_type,
+      fileType: row.file_type,
+      width: row.width,
+      height: row.height,
+      durationSeconds: row.duration_seconds,
+      tags: row.tags ? JSON.parse(row.tags) : undefined,
+      altText: row.alt_text,
+      description: row.description,
+      isPublic: row.is_public,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  } 
+
   async getFiles(userId: string, folderId?: string): Promise<MediaFile[]> {
     const pool = await getDbConnection();
     const request = new Request(pool);
@@ -305,6 +352,7 @@ export class MediaRepository {
         SELECT 
           id, folder_id, user_id, original_name, file_name, blob_path, blob_url,
           file_size, mime_type, file_type, width, height, duration_seconds,
+          thumbnail_url, thumbnail_blob_path, has_thumbnail,
           tags, alt_text, description, is_public, created_at, updated_at
         FROM media_files
         WHERE user_id = @userId 
@@ -327,6 +375,9 @@ export class MediaRepository {
       width: row.width,
       height: row.height,
       durationSeconds: row.duration_seconds,
+      thumbnailUrl: row.thumbnail_url,
+      thumbnailBlobPath: row.thumbnail_blob_path,
+      hasThumbnail: row.has_thumbnail,
       tags: row.tags ? JSON.parse(row.tags) : undefined,
       altText: row.alt_text,
       description: row.description,
@@ -353,6 +404,9 @@ export class MediaRepository {
       .input('width', fileData.width || null)
       .input('height', fileData.height || null)
       .input('durationSeconds', fileData.durationSeconds || null)
+      .input('thumbnailUrl', fileData.thumbnailUrl || null)
+      .input('thumbnailBlobPath', fileData.thumbnailBlobPath || null)
+      .input('hasThumbnail', fileData.hasThumbnail || false)
       .input('tags', fileData.tags ? JSON.stringify(fileData.tags) : null)
       .input('altText', fileData.altText || null)
       .input('description', fileData.description || null)
@@ -361,16 +415,19 @@ export class MediaRepository {
         INSERT INTO media_files (
           folder_id, user_id, original_name, file_name, blob_path, blob_url,
           file_size, mime_type, file_type, width, height, duration_seconds,
+          thumbnail_url, thumbnail_blob_path, has_thumbnail,
           tags, alt_text, description, is_public
         )
         OUTPUT inserted.id, inserted.folder_id, inserted.user_id, inserted.original_name,
                inserted.file_name, inserted.blob_path, inserted.blob_url, inserted.file_size,
                inserted.mime_type, inserted.file_type, inserted.width, inserted.height,
-               inserted.duration_seconds, inserted.tags, inserted.alt_text, inserted.description,
+               inserted.duration_seconds, inserted.thumbnail_url, inserted.thumbnail_blob_path,
+               inserted.has_thumbnail, inserted.tags, inserted.alt_text, inserted.description,
                inserted.is_public, inserted.created_at, inserted.updated_at
         VALUES (
           @folderId, @userId, @originalName, @fileName, @blobPath, @blobUrl,
           @fileSize, @mimeType, @fileType, @width, @height, @durationSeconds,
+          @thumbnailUrl, @thumbnailBlobPath, @hasThumbnail,
           @tags, @altText, @description, @isPublic
         )
       `);
@@ -390,6 +447,9 @@ export class MediaRepository {
       width: file.width,
       height: file.height,
       durationSeconds: file.duration_seconds,
+      thumbnailUrl: file.thumbnail_url,
+      thumbnailBlobPath: file.thumbnail_blob_path,
+      hasThumbnail: file.has_thumbnail,
       tags: file.tags ? JSON.parse(file.tags) : undefined,
       altText: file.alt_text,
       description: file.description,
@@ -399,7 +459,7 @@ export class MediaRepository {
     };
   }
 
-  async deleteFile(fileId: string, userId: string): Promise<void> {
+  async deleteFile(userId: string, fileId: string): Promise<void> {
     const pool = await getDbConnection();
     const request = new Request(pool);
     

@@ -4,155 +4,37 @@ import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { WebsiteService } from '../../services/website.service';
 
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  salePrice?: number;
+  images: string[];
+  category?: string;
+  description?: string;
+  features?: string[];
+  variants?: ProductVariant[];
+}
+
+interface ProductVariant {
+  name: string;
+  options: string[];
+}
+
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image: string;
+}
+
 @Component({
   selector: 'app-page-preview',
   standalone: true,
   imports: [CommonModule],
-  template: `
-    <div class="fullscreen-preview">
-      @if (loading()) {
-        <div class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i>
-          <p>Loading preview...</p>
-        </div>
-      } @else if (error()) {
-        <div class="error-state">
-          <i class="fas fa-exclamation-triangle"></i>
-          <p>{{ error() }}</p>
-          <button class="btn btn-primary" (click)="loadPreview()">
-            <i class="fas fa-refresh"></i>
-            Retry
-          </button>
-        </div>
-      } @else {
-        <!-- Preview control bar -->
-        <div class="preview-controls">
-          <div class="preview-badge">PREVIEW</div>
-          <button class="close-preview" (click)="closePreview()">
-            <i class="fas fa-times"></i>
-            Close Preview
-          </button>
-        </div>
-        <!-- Clean website preview without any CMS UI -->
-        <div class="website-preview" [innerHTML]="previewHtml()"></div>
-      }
-    </div>
-  `,
-  styles: [`
-    /* Hide any inherited app navigation/layout */
-    :host {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 10000;
-      background: white;
-    }
-
-    .fullscreen-preview {
-      width: 100vw;
-      height: 100vh;
-      background: white;
-      overflow-y: auto;
-      position: relative;
-    }
-
-    .loading-state, .error-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      gap: 20px;
-      background: white;
-    }
-
-    .loading-state i {
-      font-size: 2rem;
-      color: #007bff;
-    }
-
-    .error-state i {
-      font-size: 3rem;
-      color: #dc3545;
-    }
-
-    .preview-controls {
-      position: fixed;
-      top: 15px;
-      right: 15px;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      z-index: 10001;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 10px 15px;
-      border-radius: 5px;
-    }
-
-    .preview-badge {
-      background: #ff6b6b;
-      color: white;
-      padding: 5px 10px;
-      border-radius: 3px;
-      font-size: 12px;
-      font-weight: bold;
-    }
-
-    .close-preview {
-      background: #6c757d;
-      color: white;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .close-preview:hover {
-      background: #5a6268;
-    }
-
-    .website-preview {
-      width: 100%;
-      height: 100%;
-      background: white;
-      /* Reset all inherited styles to show clean website */
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      line-height: 1.6;
-      color: #333;
-    }
-
-    /* Ensure no CMS styles bleed through */
-    .website-preview * {
-      box-sizing: border-box;
-    }
-
-    .btn {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.2s;
-    }
-
-    .btn-primary {
-      background: #007bff;
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: #0056b3;
-    }
-  `]
+  templateUrl: './page-preview.component.html',
+  styleUrl: './page-preview.component.scss'
 })
 export class PagePreviewComponent implements OnInit {
   loading = signal(false);
@@ -173,12 +55,6 @@ export class PagePreviewComponent implements OnInit {
     this.websiteId.set(this.route.snapshot.paramMap.get('id'));
     this.pageId.set(this.route.snapshot.paramMap.get('pageId'));
     
-    console.log('Preview component initialized');
-    console.log('Website ID:', this.websiteId());
-    console.log('Page ID:', this.pageId());
-    console.log('Route params:', this.route.snapshot.paramMap.keys);
-    console.log('Full route params:', this.route.snapshot.params);
-    
     this.loadPreview();
   }
 
@@ -186,12 +62,7 @@ export class PagePreviewComponent implements OnInit {
     const websiteId = this.websiteId();
     const pageId = this.pageId();
     
-    console.log('Preview component - websiteId:', websiteId, 'pageId:', pageId);
-    console.log('Route params:', this.route.snapshot.paramMap);
-    console.log('Route URL:', this.route.snapshot.url);
-    
     if (!websiteId || !pageId) {
-      console.error('Missing websiteId or pageId');
       this.error.set('Invalid website or page ID');
       return;
     }
@@ -200,19 +71,13 @@ export class PagePreviewComponent implements OnInit {
       this.loading.set(true);
       this.error.set(null);
 
-      console.log('Fetching website and page data...');
-
       // Get website and page data
       const [website, page] = await Promise.all([
         this.websiteService.getWebsite(websiteId),
         this.websiteService.getPage(websiteId, pageId)
       ]);
 
-      console.log('Website:', website);
-      console.log('Page:', page);
-
       if (!website || !page) {
-        console.error('Website or page not found', { website, page });
         this.error.set('Website or page not found');
         return;
       }
@@ -262,8 +127,8 @@ export class PagePreviewComponent implements OnInit {
           pageContent = contentObj.blocks.map((block: any) => {
             switch (block.type) {
               case 'hero':
-                const title = block.content?.title || website.name;
-                const subtitle = block.content?.subtitle || 'Welcome to my website';
+                const title = block.content?.title || '';
+                const subtitle = block.content?.subtitle || '';
                 return `
                   <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 80px 20px; text-align: center; margin-bottom: 40px;">
                     <h1 style="font-size: 3em; margin-bottom: 20px; margin-top: 0;">${title}</h1>
@@ -477,17 +342,509 @@ export class PagePreviewComponent implements OnInit {
 
       case 'columns':
         const columnsItems = (content.columns || []).map((column: any) => `
-          <div style="flex: 1; min-width: 250px; margin-bottom: 30px;">
-            <h3>${column.title || ''}</h3>
-            <p style="line-height: 1.6;">${column.description || ''}</p>
+          <div style="flex: 1; min-width: 250px; margin-bottom: 30px; text-align: center;">
+            ${column.icon ? `<div style="font-size: 3em; color: #007bff; margin-bottom: 20px;"><i class="${column.icon}"></i></div>` : ''}
+            <h3 style="margin: 20px 0 15px 0;">${column.title || ''}</h3>
+            <p style="line-height: 1.6; color: #666;">${column.description || ''}</p>
           </div>
         `).join('');
 
         return `
-          <div class="block" style="padding: 60px 0;">
+          <div class="block" style="padding: 60px 0; background: ${styles.backgroundColor || 'transparent'};">
             ${content.title ? `<h2 style="text-align: center; margin-bottom: 20px;">${content.title}</h2>` : ''}
             ${content.subtitle ? `<p style="text-align: center; font-size: 1.2em; opacity: 0.8; margin-bottom: 50px;">${content.subtitle}</p>` : ''}
-            <div style="display: flex; flex-wrap: wrap; gap: 40px;">${columnsItems}</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 40px; justify-content: center;">${columnsItems}</div>
+          </div>
+        `;
+
+      case 'divider':
+        return `
+          <div class="block" style="padding: ${styles.padding || '20px 0'}; background: ${styles.backgroundColor || 'transparent'};">
+            <hr style="
+              border: none; 
+              height: ${content.height || '1px'}; 
+              background-color: ${content.color || '#e2e8f0'}; 
+              width: ${content.width || '100%'}; 
+              margin: 0 auto;
+              border-style: ${content.style || 'solid'};
+            ">
+          </div>
+        `;
+
+      case 'button':
+        const buttonStyle = content.style === 'secondary' ? 
+          'background: transparent; color: #007bff; border: 2px solid #007bff;' :
+          'background: #007bff; color: white; border: none;';
+        return `
+          <div class="block" style="padding: ${styles.padding || '20px 0'}; text-align: ${styles.textAlign || 'left'}; background: ${styles.backgroundColor || 'transparent'};">
+            <a href="${content.href || '#'}" style="
+              display: inline-block;
+              padding: 12px 24px;
+              text-decoration: none;
+              border-radius: 6px;
+              font-weight: 600;
+              transition: all 0.2s;
+              ${buttonStyle}
+            ">
+              ${content.text || 'Click me'}
+            </a>
+          </div>
+        `;
+
+      case 'spacer':
+        return `<div style="height: ${content.height || '40px'};"></div>`;
+
+      case 'image':
+        return `
+          <div class="block" style="padding: ${styles.padding || '20px 0'}; text-align: ${styles.textAlign || 'center'}; background: ${styles.backgroundColor || 'transparent'};">
+            ${content.src ? 
+              `<img src="${content.src}" alt="${content.alt || ''}" style="max-width: 100%; height: auto; border-radius: ${styles.borderRadius || '0px'};">` :
+              `<div style="padding: 40px; border: 2px dashed #ccc; border-radius: 8px; text-align: center; color: #666;">
+                <p>No image selected</p>
+              </div>`
+            }
+            ${content.caption ? `<p style="margin-top: 10px; font-style: italic; color: #666;">${content.caption}</p>` : ''}
+          </div>
+        `;
+
+      case 'form':
+        const formFields = (content.fields || []).map((field: any) => {
+          if (field.type === 'textarea') {
+            return `
+              <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">${field.label}${field.required ? '*' : ''}</label>
+                <textarea style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" rows="4" placeholder="${field.label}"></textarea>
+              </div>
+            `;
+          } else {
+            return `
+              <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">${field.label}${field.required ? '*' : ''}</label>
+                <input type="${field.type}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" placeholder="${field.label}">
+              </div>
+            `;
+          }
+        }).join('');
+
+        return `
+          <div class="block" style="padding: ${styles.padding || '40px 20px'}; background: ${styles.backgroundColor || 'transparent'};">
+            <form>
+              <h3 style="margin-bottom: 30px;">${content.title || 'Contact Form'}</h3>
+              ${formFields}
+              <button type="button" style="
+                background: #007bff;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 4px;
+                font-weight: 600;
+                cursor: pointer;
+              ">
+                ${content.submitText || 'Submit'}
+              </button>
+            </form>
+          </div>
+        `;
+
+      case 'contact':
+        return `
+          <div class="block" style="padding: ${styles.padding || '40px 20px'}; background: ${styles.backgroundColor || 'transparent'};">
+            ${content.title ? `<h2 style="text-align: center; margin-bottom: 20px;">${content.title}</h2>` : ''}
+            ${content.subtitle ? `<p style="text-align: center; font-size: 1.2em; opacity: 0.8; margin-bottom: 40px;">${content.subtitle}</p>` : ''}
+            <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap;">
+              ${content.phone ? `
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <div style="font-size: 2em; color: #3b82f6; margin-bottom: 10px;"><i class="fas fa-phone"></i></div>
+                  <h4 style="margin: 0 0 5px 0;">Phone</h4>
+                  <p style="margin: 0; color: #666;">${content.phone}</p>
+                </div>
+              ` : ''}
+              ${content.email ? `
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <div style="font-size: 2em; color: #3b82f6; margin-bottom: 10px;"><i class="fas fa-envelope"></i></div>
+                  <h4 style="margin: 0 0 5px 0;">Email</h4>
+                  <p style="margin: 0; color: #666;">${content.email}</p>
+                </div>
+              ` : ''}
+              ${content.address ? `
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <div style="font-size: 2em; color: #3b82f6; margin-bottom: 10px;"><i class="fas fa-map-marker-alt"></i></div>
+                  <h4 style="margin: 0 0 5px 0;">Address</h4>
+                  <p style="margin: 0; color: #666;">${content.address}</p>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+
+      case 'product-catalog':
+        const displayMode = content.displayMode || 'grid';
+        const productsPerRow = content.productsPerRow || 3;
+        const sampleProducts = content.products || [
+          {
+            id: '1',
+            name: 'Premium Product',
+            price: 29.99,
+            salePrice: 24.99,
+            images: ['/assets/sample-product.jpg'],
+            category: 'featured'
+          },
+          {
+            id: '2',
+            name: 'Best Seller',
+            price: 39.99,
+            images: ['/assets/sample-product2.jpg'],
+            category: 'popular'
+          },
+          {
+            id: '3',
+            name: 'New Arrival',
+            price: 19.99,
+            images: ['/assets/sample-product3.jpg'],
+            category: 'new'
+          }
+        ];
+
+        const productCards = sampleProducts.map((product: Product) => `
+          <div style="
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            transition: transform 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          ">
+            <img src="${product.images[0] || '/placeholder-product.jpg'}" 
+                 alt="${product.name}" 
+                 style="width: 100%; height: 200px; object-fit: cover; border-radius: 6px; margin-bottom: 12px;">
+            <h4 style="margin: 0 0 8px 0; font-size: 16px;">${product.name}</h4>
+            <div style="margin: 8px 0;">
+              ${product.salePrice ? 
+                `<span style="color: #dc2626; font-weight: bold;">$${product.salePrice}</span>
+                 <span style="text-decoration: line-through; color: #6b7280; margin-left: 8px;">$${product.price}</span>` :
+                `<span style="font-weight: bold;">$${product.price}</span>`
+              }
+            </div>
+            <button style="
+              background: #007bff;
+              color: white;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 4px;
+              font-size: 14px;
+              cursor: pointer;
+              width: 100%;
+            ">Add to Cart</button>
+          </div>
+        `).join('');
+
+        return `
+          <div class="block" style="padding: 40px 20px;">
+            <h2 style="text-align: center; margin-bottom: 40px;">${content.title || 'Our Products'}</h2>
+            <div style="
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+              gap: 24px;
+              max-width: 1200px;
+              margin: 0 auto;
+            ">
+              ${productCards}
+            </div>
+          </div>
+        `;
+
+      case 'product-detail':
+        const product = content.product || {
+          name: 'Premium Product',
+          price: 29.99,
+          salePrice: 24.99,
+          images: ['/placeholder-product.jpg'],
+          description: 'This is a sample product description with detailed information about features and benefits.',
+          features: ['High Quality', 'Fast Shipping', '30-Day Return'],
+          variants: [
+            { name: 'Color', options: ['Red', 'Blue', 'Green'] },
+            { name: 'Size', options: ['Small', 'Medium', 'Large'] }
+          ]
+        };
+
+        const variantSelectors = product.variants ? product.variants.map((variant: ProductVariant) => `
+          <div style="margin: 16px 0;">
+            <label style="display: block; font-weight: bold; margin-bottom: 8px;">${variant.name}:</label>
+            <select style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+              ${variant.options.map((option: string) => `<option value="${option}">${option}</option>`).join('')}
+            </select>
+          </div>
+        `).join('') : '';
+
+        return `
+          <div class="block" style="padding: 40px 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; max-width: 1200px; margin: 0 auto;">
+              <div>
+                <img src="${product.images[0] || '/placeholder-product.jpg'}" 
+                     alt="${product.name}" 
+                     style="width: 100%; height: 400px; object-fit: cover; border-radius: 8px;">
+              </div>
+              <div>
+                <h1 style="margin: 0 0 16px 0;">${product.name}</h1>
+                <div style="margin: 16px 0; font-size: 24px;">
+                  ${product.salePrice ? 
+                    `<span style="color: #dc2626; font-weight: bold;">$${product.salePrice}</span>
+                     <span style="text-decoration: line-through; color: #6b7280; margin-left: 12px;">$${product.price}</span>` :
+                    `<span style="font-weight: bold;">$${product.price}</span>`
+                  }
+                </div>
+                <p style="line-height: 1.6; color: #4b5563; margin: 20px 0;">${product.description}</p>
+                ${variantSelectors}
+                <div style="margin: 24px 0;">
+                  <label style="display: block; font-weight: bold; margin-bottom: 8px;">Quantity:</label>
+                  <input type="number" value="1" min="1" style="width: 80px; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+                </div>
+                <button style="
+                  background: #007bff;
+                  color: white;
+                  border: none;
+                  padding: 16px 32px;
+                  border-radius: 6px;
+                  font-size: 16px;
+                  font-weight: bold;
+                  cursor: pointer;
+                  width: 100%;
+                  margin: 20px 0;
+                ">Add to Cart</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+      case 'shopping-cart':
+        const cartItems = content.items || [
+          { id: '1', name: 'Sample Product 1', price: 29.99, quantity: 2, image: '/placeholder-product.jpg' },
+          { id: '2', name: 'Sample Product 2', price: 19.99, quantity: 1, image: '/placeholder-product2.jpg' }
+        ];
+        const subtotal = cartItems.reduce((sum: number, item: CartItem) => sum + (item.price * item.quantity), 0);
+        const shipping = 9.99;
+        const total = subtotal + shipping;
+
+        const cartRows = cartItems.map((item: CartItem) => `
+          <tr>
+            <td style="padding: 16px; border-bottom: 1px solid #e5e7eb;">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <img src="${item.image}" alt="${item.name}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px;">
+                <div>
+                  <h4 style="margin: 0; font-size: 16px;">${item.name}</h4>
+                  <p style="margin: 4px 0 0 0; color: #6b7280;">$${item.price.toFixed(2)}</p>
+                </div>
+              </div>
+            </td>
+            <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+              <input type="number" value="${item.quantity}" min="1" style="width: 60px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center;">
+            </td>
+            <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold;">
+              $${(item.price * item.quantity).toFixed(2)}
+            </td>
+            <td style="padding: 16px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+              <button style="color: #dc2626; border: none; background: none; cursor: pointer;">Remove</button>
+            </td>
+          </tr>
+        `).join('');
+
+        return `
+          <div class="block" style="padding: 40px 20px;">
+            <h2 style="margin-bottom: 40px;">Shopping Cart</h2>
+            <div style="max-width: 1000px; margin: 0 auto;">
+              <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <thead>
+                  <tr style="background: #f9fafb;">
+                    <th style="padding: 16px; text-align: left; border-bottom: 2px solid #e5e7eb;">Product</th>
+                    <th style="padding: 16px; text-align: center; border-bottom: 2px solid #e5e7eb;">Quantity</th>
+                    <th style="padding: 16px; text-align: right; border-bottom: 2px solid #e5e7eb;">Total</th>
+                    <th style="padding: 16px; border-bottom: 2px solid #e5e7eb;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${cartRows}
+                </tbody>
+              </table>
+              <div style="margin-top: 32px; max-width: 400px; margin-left: auto;">
+                <div style="background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                  <h3 style="margin: 0 0 16px 0;">Order Summary</h3>
+                  <div style="display: flex; justify-content: space-between; margin: 8px 0;">
+                    <span>Subtotal:</span>
+                    <span>$${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin: 8px 0;">
+                    <span>Shipping:</span>
+                    <span>$${shipping.toFixed(2)}</span>
+                  </div>
+                  <hr style="margin: 16px 0; border: none; border-top: 1px solid #e5e7eb;">
+                  <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 18px;">
+                    <span>Total:</span>
+                    <span>$${total.toFixed(2)}</span>
+                  </div>
+                  <button style="
+                    background: #007bff;
+                    color: white;
+                    border: none;
+                    padding: 16px;
+                    border-radius: 6px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    width: 100%;
+                    margin-top: 20px;
+                  ">Proceed to Checkout</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+      case 'checkout':
+        return `
+          <div class="block" style="padding: 40px 20px;">
+            <h2 style="text-align: center; margin-bottom: 40px;">Checkout</h2>
+            <div style="max-width: 800px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 40px;">
+              <div>
+                <h3>Shipping Information</h3>
+                <form style="background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                    <input type="text" placeholder="First Name" style="padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
+                    <input type="text" placeholder="Last Name" style="padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
+                  </div>
+                  <input type="email" placeholder="Email" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 16px;">
+                  <input type="text" placeholder="Address" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 16px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr 100px; gap: 16px; margin-bottom: 16px;">
+                    <input type="text" placeholder="City" style="padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
+                    <select style="padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
+                      <option>State</option>
+                    </select>
+                    <input type="text" placeholder="ZIP" style="padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
+                  </div>
+                </form>
+
+                <h3 style="margin-top: 32px;">Payment Information</h3>
+                <form style="background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                  <input type="text" placeholder="Card Number" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 16px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <input type="text" placeholder="MM/YY" style="padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
+                    <input type="text" placeholder="CVC" style="padding: 12px; border: 1px solid #d1d5db; border-radius: 4px;">
+                  </div>
+                </form>
+              </div>
+              
+              <div>
+                <h3>Order Summary</h3>
+                <div style="background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                  <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                      <span>Sample Product × 2</span>
+                      <span>$59.98</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span>Another Product × 1</span>
+                      <span>$19.99</span>
+                    </div>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin: 8px 0;">
+                    <span>Subtotal:</span>
+                    <span>$79.97</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin: 8px 0;">
+                    <span>Shipping:</span>
+                    <span>$9.99</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin: 8px 0;">
+                    <span>Tax:</span>
+                    <span>$7.20</span>
+                  </div>
+                  <hr style="margin: 16px 0; border: none; border-top: 1px solid #e5e7eb;">
+                  <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 18px;">
+                    <span>Total:</span>
+                    <span>$97.16</span>
+                  </div>
+                  <button style="
+                    background: #10b981;
+                    color: white;
+                    border: none;
+                    padding: 16px;
+                    border-radius: 6px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    width: 100%;
+                    margin-top: 24px;
+                  ">Place Order</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+      case 'product-search':
+        return `
+          <div class="block" style="padding: 40px 20px;">
+            <div style="max-width: 1200px; margin: 0 auto;">
+              <h2 style="text-align: center; margin-bottom: 40px;">Search Products</h2>
+              
+              <div style="display: flex; gap: 32px;">
+                <div style="width: 250px; background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); height: fit-content;">
+                  <h3 style="margin: 0 0 20px 0;">Filters</h3>
+                  
+                  <div style="margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px 0;">Category</h4>
+                    <label style="display: block; margin: 8px 0;"><input type="checkbox" style="margin-right: 8px;"> Electronics</label>
+                    <label style="display: block; margin: 8px 0;"><input type="checkbox" style="margin-right: 8px;"> Clothing</label>
+                    <label style="display: block; margin: 8px 0;"><input type="checkbox" style="margin-right: 8px;"> Home & Garden</label>
+                  </div>
+                  
+                  <div style="margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px 0;">Price Range</h4>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <input type="number" placeholder="Min" style="width: 80px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                      <span>-</span>
+                      <input type="number" placeholder="Max" style="width: 80px; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px;">
+                    </div>
+                  </div>
+                  
+                  <button style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; width: 100%;">
+                    Apply Filters
+                  </button>
+                </div>
+                
+                <div style="flex: 1;">
+                  <div style="display: flex; gap: 16px; margin-bottom: 24px; align-items: center;">
+                    <input type="text" placeholder="Search products..." style="flex: 1; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                    <select style="padding: 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                      <option>Sort by</option>
+                      <option>Price: Low to High</option>
+                      <option>Price: High to Low</option>
+                      <option>Name: A-Z</option>
+                      <option>Newest First</option>
+                    </select>
+                  </div>
+                  
+                  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
+                    ${Array.from({length: 6}).map((_, i) => `
+                      <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; text-align: center;">
+                        <img src="/placeholder-product${i+1}.jpg" alt="Product ${i+1}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 6px; margin-bottom: 12px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 14px;">Search Result ${i+1}</h4>
+                        <p style="margin: 8px 0; font-weight: bold;">$${(Math.random() * 50 + 10).toFixed(2)}</p>
+                        <button style="background: #007bff; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; width: 100%;">
+                          Add to Cart
+                        </button>
+                      </div>
+                    `).join('')}
+                  </div>
+                  
+                  <div style="text-align: center; margin-top: 32px;">
+                    <button style="background: #6b7280; color: white; border: none; padding: 10px 20px; border-radius: 4px; margin: 0 4px;">Previous</button>
+                    <span style="margin: 0 16px; color: #6b7280;">Page 1 of 3</span>
+                    <button style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; margin: 0 4px;">Next</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         `;
 

@@ -64,7 +64,8 @@
               "buildTarget": "photopoint:build:production"
             },
             "development": {
-              "buildTarget": "photopoint:build:development"
+              "buildTarget": "photopoint:build:development",
+              "proxyConfig": "proxy.conf.json"
             }
           },
           "defaultConfiguration": "development"

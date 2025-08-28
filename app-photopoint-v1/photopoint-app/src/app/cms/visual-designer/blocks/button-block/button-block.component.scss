@@ -1,0 +1,146 @@
+.button-block {
+  position: relative;
+  min-height: 60px;
+  cursor: pointer;
+}
+
+.button-content {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.block-button {
+  display: inline-block;
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: 2px solid transparent;
+
+  &.size-small {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+
+  &.size-medium {
+    padding: 12px 24px;
+    font-size: 16px;
+  }
+
+  &.size-large {
+    padding: 16px 32px;
+    font-size: 18px;
+  }
+
+  &.style-primary {
+    background: #3b82f6;
+    color: white;
+
+    &:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+    }
+  }
+
+  &.style-secondary {
+    background: #6b7280;
+    color: white;
+
+    &:hover {
+      background: #4b5563;
+      transform: translateY(-2px);
+    }
+  }
+
+  &.style-outline {
+    background: transparent;
+    color: #3b82f6;
+    border-color: #3b82f6;
+
+    &:hover {
+      background: #3b82f6;
+      color: white;
+      transform: translateY(-2px);
+    }
+  }
+}
+
+.inline-button-editor {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  border: 2px solid #3b82f6;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.button-editor-grid {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.editor-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.editor-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  label {
+    font-weight: 500;
+    font-size: 14px;
+    color: #374151;
+  }
+}
+
+.form-control {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  &.color-input {
+    height: 40px;
+    padding: 2px;
+  }
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &.btn-primary {
+    background: #3b82f6;
+    color: white;
+
+    &:hover {
+      background: #2563eb;
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 
@@ -96,8 +97,9 @@ export class WebsiteService {
 
   // WEBSITE METHODS
   async getWebsites(): Promise<Website[]> {
-    try {
-      const response = await this.http.get<Website[]>(`${this.apiUrl}/websites`, { headers: this.getHeaders() }).toPromise();
+      const response = await firstValueFrom(
+        this.http.get<Website[]>(`${this.apiUrl}/websites`, { headers: this.getHeaders() })
+      );
       if (response && Array.isArray(response)) {
         return response.map((w: any) => ({
           id: w.id,
@@ -116,15 +118,12 @@ export class WebsiteService {
         }));
       }
       return [];
-    } catch (error) {
-      console.error('Failed to fetch websites:', error);
-      throw error;
-    }
   }
 
   async getWebsite(id: string): Promise<Website> {
     try {
-      const response = await this.http.get<any>(`${this.apiUrl}/websites/${id}`, { headers: this.getHeaders() }).toPromise();
+      const response = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/websites/${id}`, { headers: this.getHeaders() }));
+      
       if (response) {
         const w = response.website || response;
         return {
@@ -151,7 +150,7 @@ export class WebsiteService {
 
   async createWebsite(websiteData: CreateWebsiteRequest): Promise<Website> {
     try {
-      const response = await this.http.post<Website>(`${this.apiUrl}/websites`, websiteData, { headers: this.getHeaders() }).toPromise();
+      const response = await firstValueFrom(this.http.post<Website>(`${this.apiUrl}/websites`, websiteData, { headers: this.getHeaders() }));
       if (response) {
         return response;
       }
@@ -163,7 +162,7 @@ export class WebsiteService {
 
   async updateWebsite(id: string, websiteData: UpdateWebsiteRequest): Promise<Website> {
     try {
-      const response = await this.http.put<Website>(`${this.apiUrl}/websites/${id}`, websiteData, { headers: this.getHeaders() }).toPromise();
+      const response = await firstValueFrom(this.http.put<Website>(`${this.apiUrl}/websites/${id}`, websiteData, { headers: this.getHeaders() }));
       if (response) {
         return response;
       }
@@ -175,7 +174,7 @@ export class WebsiteService {
 
   async deleteWebsite(id: string): Promise<void> {
     try {
-      await this.http.delete(`${this.apiUrl}/websites/${id}`, { headers: this.getHeaders() }).toPromise();
+      await firstValueFrom(this.http.delete(`${this.apiUrl}/websites/${id}`, { headers: this.getHeaders() }));
     } catch (error) {
       console.error('Failed to delete website:', error);
       throw error;
@@ -185,7 +184,7 @@ export class WebsiteService {
   // PUBLIC API METHODS (for viewer)
   async getPublicWebsite(domain: string): Promise<Website> {
     try {
-      const response = await this.http.get<any>(`${this.apiUrl}/public/website/${domain}`).toPromise();
+      const response = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/websites/website/${domain}`));
       if (response) {
         const w = response;
         return {
@@ -212,7 +211,7 @@ export class WebsiteService {
 
   async getPublicPages(domain: string): Promise<Page[]> {
     try {
-      const response = await this.http.get<Page[]>(`${this.apiUrl}/public/website/${domain}/pages`).toPromise();
+      const response = await firstValueFrom(this.http.get<Page[]>(`${this.apiUrl}/websites/website/${domain}/pages`));
       if (response && Array.isArray(response)) {
         return response.map((p: any) => ({
           id: p.id,
@@ -237,7 +236,7 @@ export class WebsiteService {
 
   async getPublicPage(domain: string, slug: string): Promise<Page> {
     try {
-      const response = await this.http.get<any>(`${this.apiUrl}/public/website/${domain}/page/${slug}`).toPromise();
+      const response = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/websites/website/${domain}/pages/${slug}`));
       if (response) {
         const p = response;
         return {
@@ -263,7 +262,7 @@ export class WebsiteService {
   // PAGE METHODS
   async getPages(websiteId: string): Promise<Page[]> {
     try {
-      const response = await this.http.get<Page[]>(`${this.apiUrl}/websites/${websiteId}/pages`, { headers: this.getHeaders() }).toPromise();
+      const response = await firstValueFrom(this.http.get<Page[]>(`${this.apiUrl}/websites/${websiteId}/pages`, { headers: this.getHeaders() }));
       if (response && Array.isArray(response)) {
         return response.map((p: any) => ({
           id: p.id,
@@ -288,7 +287,8 @@ export class WebsiteService {
 
   async getPage(websiteId: string, pageId: string): Promise<Page> {
     try {
-      const response = await this.http.get<any>(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, { headers: this.getHeaders() }).toPromise();
+      const response = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, { headers: this.getHeaders() }));
+      
       if (response) {
         const p = response;
         return {
@@ -313,7 +313,7 @@ export class WebsiteService {
 
   async createPage(websiteId: string, pageData: CreatePageRequest): Promise<Page> {
     try {
-      const response = await this.http.post<Page>(`${this.apiUrl}/websites/${websiteId}/pages`, pageData, { headers: this.getHeaders() }).toPromise();
+      const response = await firstValueFrom(this.http.post<Page>(`${this.apiUrl}/websites/${websiteId}/pages`, pageData, { headers: this.getHeaders() }));
       if (response) {
         return response;
       }
@@ -325,7 +325,7 @@ export class WebsiteService {
 
   async updatePage(websiteId: string, pageId: string, pageData: UpdatePageRequest): Promise<Page> {
     try {
-      const response = await this.http.put<Page>(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, pageData, { headers: this.getHeaders() }).toPromise();
+      const response = await firstValueFrom(this.http.put<Page>(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, pageData, { headers: this.getHeaders() }));
       if (response) {
         return response;
       }
@@ -337,7 +337,7 @@ export class WebsiteService {
 
   async deletePage(websiteId: string, pageId: string): Promise<void> {
     try {
-      await this.http.delete(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, { headers: this.getHeaders() }).toPromise();
+      await firstValueFrom(this.http.delete(`${this.apiUrl}/websites/${websiteId}/pages/${pageId}`, { headers: this.getHeaders() }));
     } catch (error) {
       console.error('Failed to delete page:', error);
       throw error;
@@ -372,7 +372,32 @@ export class WebsiteService {
   }
 
   async publishWebsite(id: string): Promise<Website> {
-    return this.updateWebsite(id, { status: 'published' });
+    try {
+      const response = await firstValueFrom(this.http.post<{ message: string, website: any, publishedAt: string }>(`${this.apiUrl}/websites/${id}/publish`, {}, { headers: this.getHeaders() }));
+      if (response && response.website) {
+        // Map the response website data to frontend Website interface
+        const w = response.website;
+        return {
+          id: w.id,
+          name: w.name,
+          description: w.description || '',
+          subdomain: w.subdomain,
+          customDomain: w.customDomain || w.domain || '',
+          favicon: w.favicon || '',
+          status: w.status === 'active' ? 'published' : (w.status || 'draft'),
+          theme: w.theme || 'default',
+          pageCount: w.pageCount || 0,
+          visits: w.visits || 0,
+          ownerId: w.userId || w.ownerId,
+          createdAt: new Date(w.createdAt),
+          updatedAt: new Date(w.updatedAt)
+        };
+      }
+      throw new Error('Failed to publish website');
+    } catch (error) {
+      console.error('Failed to publish website:', error);
+      throw error;
+    }
   }
 
   async unpublishWebsite(id: string): Promise<Website> {

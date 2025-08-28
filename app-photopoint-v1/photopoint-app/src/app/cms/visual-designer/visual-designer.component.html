@@ -1,0 +1,317 @@
+<div class="visual-designer">
+  <!-- Top Header -->
+  <div class="designer-header">
+    <div class="header-left">
+      <button class="btn" (click)="goBack()">
+        <i class="fas fa-arrow-left"></i>
+        Back to Pages
+      </button>
+      
+      <div class="page-info">
+        <h2>{{ page()?.title || 'Untitled Page' }}</h2>
+        <span class="page-path">{{ page()?.slug || '/untitled' }}</span>
+      </div>
+    </div>
+    
+    <div class="header-center">
+      <!-- Device Preview Buttons -->
+      <div class="device-buttons">
+        <button 
+          class="device-btn"
+          [class.active]="selectedDevice() === 'desktop'"
+          (click)="selectedDevice.set('desktop')"
+          title="Desktop Preview"
+        >
+          <i class="fas fa-desktop"></i>
+          <span>Desktop</span>
+        </button>
+        <button 
+          class="device-btn"
+          [class.active]="selectedDevice() === 'tablet'"
+          (click)="selectedDevice.set('tablet')"
+          title="Tablet Preview"
+        >
+          <i class="fas fa-tablet-alt"></i>
+          <span>Tablet</span>
+        </button>
+        <button 
+          class="device-btn"
+          [class.active]="selectedDevice() === 'mobile'"
+          (click)="selectedDevice.set('mobile')"
+          title="Mobile Preview"
+        >
+          <i class="fas fa-mobile-alt"></i>
+          <span>Mobile</span>
+        </button>
+      </div>
+    </div>
+    
+    <div class="header-right">
+      <!-- Add Components Button -->
+      @if (!isPreview()) {
+        <button 
+          class="btn btn-secondary" 
+          (click)="toggleComponentsPanel()"
+          [class.active]="showComponentsPanel()"
+        >
+          <i class="fas fa-plus"></i>
+          Components
+        </button>
+      }
+      
+      <button 
+        class="btn" 
+        [class.active]="!isPreview()"
+        (click)="setPreview(false)"
+      >
+        <i class="fas fa-edit"></i>
+        Edit
+      </button>
+      <button 
+        class="btn" 
+        [class.active]="isPreview()"
+        (click)="setPreview(true)"
+      >
+        <i class="fas fa-eye"></i>
+        Preview
+      </button>
+      <button 
+        class="btn btn-secondary"
+        (click)="openPreviewWindow()"
+        title="Open preview in new window"
+      >
+        <i class="fas fa-external-link-alt"></i>
+      </button>
+      <button class="btn btn-primary" (click)="savePage()">
+        <i class="fas fa-save"></i>
+        Save
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div 
+    class="designer-content" 
+    [class.preview-mode]="isPreview()"
+    [class.dragging]="isDragging()"
+  >
+    <!-- Component Palette Flyout (Edit Mode Only) -->
+    @if (!isPreview() && showComponentsPanel()) {
+      <!-- Backdrop -->
+      <div 
+        class="flyout-backdrop" 
+        [class.dragging]="isDragging()"
+        (click)="!isDragging() && closeComponentsPanel()"
+      ></div>
+      
+      <!-- Left Side Flyout Panel -->
+      <div class="component-flyout-left">
+        <div class="flyout-header">
+          <h3>Add Components</h3>
+          <button class="close-btn" (click)="closeComponentsPanel()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="flyout-content">
+          <div class="component-grid">
+            @for (component of availableComponents; track component.type) {
+              <div 
+                class="component-item"
+                draggable="true"
+                (dragstart)="onDragStart($event, component.type)"
+                (dragend)="onDragEnd()"
+                (click)="addComponentToCanvas(component.type)"
+                [attr.data-component-type]="component.type"
+              >
+                <i [class]="component.icon"></i>
+                <span>{{ component.name }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Full Width Design Canvas -->
+    <div class="design-canvas-container">
+      <div 
+        class="design-canvas"
+        [class.drop-zone-active]="dropZoneVisible()"
+        (dragover)="onDragOver($event)"
+        (drop)="onDrop($event)"
+        (dragenter)="onDragOver($event)"
+        (dragleave)="$event.preventDefault()"
+      >
+        <div class="canvas-viewport" [ngClass]="'device-' + selectedDevice()">
+          <!-- Canvas Content -->
+          <div 
+            class="canvas-content"
+            (dragover)="onDragOver($event)"
+            (drop)="onDrop($event)"
+          >
+            <!-- Error State -->
+            @if (loadingError()) {
+              <div style="padding: 20px; background: #fee2e2; border: 2px solid #dc2626; margin: 10px; border-radius: 8px;">
+                <h3 style="color: #dc2626; margin: 0 0 10px 0;">Error Loading Page</h3>
+                <p style="margin: 0; color: #7f1d1d;">{{ loadingError() }}</p>
+                <button style="margin-top: 10px; padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer;" (click)="loadPage()">
+                  Retry
+                </button>
+              </div>
+            }
+            
+            @if (designBlocks().length === 0) {
+              <!-- Empty State -->
+              <div 
+                class="empty-canvas"
+                [class.drop-zone]="dropZoneVisible()"
+                (dragover)="onDragOver($event)"
+                (drop)="onDrop($event)"
+                (dragenter)="onDragOver($event)"
+              >
+                <div class="empty-state">
+                  <i class="fas fa-plus-circle"></i>
+                  <h3>Start building your page</h3>
+                  <p>Click "Add Component" to add elements to your page, or drag them from the component panel</p>
+                </div>
+                @if (dropZoneVisible()) {
+                  <div class="drop-zone-indicator">
+                    <i class="fas fa-plus"></i>
+                    <span>Drop {{ draggedComponentType() }} here</span>
+                  </div>
+                }
+              </div>
+            } @else {
+              <!-- Drop zone before first block -->
+              @if (dropZoneVisible()) {
+                <div 
+                  class="drop-zone"
+                  (dragover)="onDragOver($event)"
+                  (drop)="onDrop($event, 0)"
+                >
+                  <div class="drop-zone-indicator">
+                    <i class="fas fa-plus"></i>
+                    <span>Drop {{ draggedComponentType() }} here</span>
+                  </div>
+                </div>
+              }
+
+              <!-- Blocks -->
+              @for (block of designBlocks(); track block.id; let i = $index) {
+                <div class="block-wrapper">
+                  <!-- Block Container -->
+                  <div 
+                    class="design-block"
+                    [class.selected]="selectedBlockId() === block.id"
+                    [class.editing]="editingBlockId() === block.id"
+                    (click)="selectBlock(block.id, $event)"
+                    [attr.data-block-id]="block.id"
+                  >
+                    <!-- Block Controls -->
+                    @if (selectedBlockId() === block.id && !isPreview() && !editingBlockId()) {
+                      <div class="block-controls">
+                        <button class="control-btn" (click)="moveBlockUp(block.id); $event.stopPropagation()" title="Move Up">
+                          <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button class="control-btn" (click)="moveBlockDown(block.id); $event.stopPropagation()" title="Move Down">
+                          <i class="fas fa-arrow-down"></i>
+                        </button>
+                        <button class="control-btn edit" (click)="startBlockEdit(block.id); $event.stopPropagation()" title="Edit Settings">
+                          <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="control-btn" (click)="duplicateBlock(block.id); $event.stopPropagation()" title="Duplicate">
+                          <i class="fas fa-copy"></i>
+                        </button>
+                        <button class="control-btn danger" (click)="deleteBlock(block.id); $event.stopPropagation()" title="Delete">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    }
+
+                    <!-- Render the appropriate block component -->
+                    @switch (block.type) {
+                      @case ('text') {
+                        <app-text-block
+                          [data]="block"
+                          [isEditing]="editingBlockId() === block.id"
+                          [isSelected]="selectedBlockId() === block.id"
+                          [isPreview]="isPreview()"
+                          (contentChange)="updateBlockContent(block.id, $event)"
+                          (editingChange)="onBlockEditingChange(block.id, $event)"
+                        ></app-text-block>
+                      }
+                      @case ('hero') {
+                        <app-hero-block
+                          [data]="block"
+                          [isEditing]="editingBlockId() === block.id"
+                          [isSelected]="selectedBlockId() === block.id"
+                          [isPreview]="isPreview()"
+                          (contentChange)="updateBlockContent(block.id, $event)"
+                          (editingChange)="onBlockEditingChange(block.id, $event)"
+                        ></app-hero-block>
+                      }
+                      @case ('image') {
+                        <app-image-block
+                          [data]="block"
+                          [isEditing]="editingBlockId() === block.id"
+                          [isSelected]="selectedBlockId() === block.id"
+                          [isPreview]="isPreview()"
+                          (contentChange)="updateBlockContent(block.id, $event)"
+                          (editingChange)="onBlockEditingChange(block.id, $event)"
+                        ></app-image-block>
+                      }
+                      @case ('button') {
+                        <app-button-block
+                          [data]="block"
+                          [isEditing]="editingBlockId() === block.id"
+                          [isSelected]="selectedBlockId() === block.id"
+                          [isPreview]="isPreview()"
+                          (contentChange)="updateBlockContent(block.id, $event)"
+                          (editingChange)="onBlockEditingChange(block.id, $event)"
+                        ></app-button-block>
+                      }
+                      @case ('columns') {
+                        <app-columns-block
+                          [data]="block"
+                          [isEditing]="editingBlockId() === block.id"
+                          [isSelected]="selectedBlockId() === block.id"
+                          [isPreview]="isPreview()"
+                          (contentChange)="updateBlockContent(block.id, $event)"
+                          (editingChange)="onBlockEditingChange(block.id, $event)"
+                        ></app-columns-block>
+                      }
+                      @case ('spacer') {
+                        <app-spacer-block
+                          [data]="block"
+                          [isEditing]="editingBlockId() === block.id"
+                          [isSelected]="selectedBlockId() === block.id"
+                          [isPreview]="isPreview()"
+                          (contentChange)="updateBlockContent(block.id, $event)"
+                          (editingChange)="onBlockEditingChange(block.id, $event)"
+                        ></app-spacer-block>
+                      }
+                    }
+                  </div>
+                  
+                  <!-- Drop zone after each block -->
+                  @if (dropZoneVisible()) {
+                    <div 
+                      class="drop-zone"
+                      (dragover)="onDragOver($event)"
+                      (drop)="onDrop($event, i + 1)"
+                    >
+                      <div class="drop-zone-indicator">
+                        <i class="fas fa-plus"></i>
+                        <span>Drop {{ draggedComponentType() }} here</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

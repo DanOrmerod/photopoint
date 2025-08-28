@@ -1,0 +1,231 @@
+<div class="theme-customizer">
+  <div class="customizer-header">
+    <h3>
+      <i class="fas fa-palette"></i>
+      Theme Customization
+    </h3>
+    <button class="close-btn" (click)="closeCustomizer()">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <div class="customizer-content">
+    <!-- Theme Selection -->
+    <div class="section">
+      <h4>Choose a Theme</h4>
+      <div class="themes-grid">
+        @for (theme of themes(); track theme.id) {
+          <div 
+            class="theme-card"
+            [class.active]="selectedTheme()?.id === theme.id"
+            (click)="selectTheme(theme)"
+          >
+            <div class="theme-preview" [innerHTML]="getThemePreview(theme)"></div>
+            <div class="theme-info">
+              <h5>{{ theme.name }}</h5>
+              <p>{{ theme.description }}</p>
+              <span class="category-badge" [class]="'category-' + theme.category">
+                {{ theme.category }}
+              </span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Custom Color Overrides -->
+    @if (selectedTheme()) {
+      <div class="section">
+        <h4>Customize Colors</h4>
+        <div class="color-controls">
+          <div class="color-group">
+            <label>Primary Color</label>
+            <div class="color-input-group">
+              <input 
+                type="color" 
+                class="color-picker"
+                [value]="customColors().primary"
+                (input)="updateCustomColor('primary', $event)"
+              >
+              <input 
+                type="text" 
+                class="color-text"
+                [value]="customColors().primary"
+                (input)="updateCustomColor('primary', $event)"
+                placeholder="#000000"
+              >
+            </div>
+          </div>
+
+          <div class="color-group">
+            <label>Secondary Color</label>
+            <div class="color-input-group">
+              <input 
+                type="color" 
+                class="color-picker"
+                [value]="customColors().secondary"
+                (input)="updateCustomColor('secondary', $event)"
+              >
+              <input 
+                type="text" 
+                class="color-text"
+                [value]="customColors().secondary"
+                (input)="updateCustomColor('secondary', $event)"
+                placeholder="#000000"
+              >
+            </div>
+          </div>
+
+          <div class="color-group">
+            <label>Accent Color</label>
+            <div class="color-input-group">
+              <input 
+                type="color" 
+                class="color-picker"
+                [value]="customColors().accent"
+                (input)="updateCustomColor('accent', $event)"
+              >
+              <input 
+                type="text" 
+                class="color-text"
+                [value]="customColors().accent"
+                (input)="updateCustomColor('accent', $event)"
+                placeholder="#000000"
+              >
+            </div>
+          </div>
+
+          <div class="color-group">
+            <label>Background Color</label>
+            <div class="color-input-group">
+              <input 
+                type="color" 
+                class="color-picker"
+                [value]="customColors().background"
+                (input)="updateCustomColor('background', $event)"
+              >
+              <input 
+                type="text" 
+                class="color-text"
+                [value]="customColors().background"
+                (input)="updateCustomColor('background', $event)"
+                placeholder="#ffffff"
+              >
+            </div>
+          </div>
+
+          <div class="color-group">
+            <label>Text Color</label>
+            <div class="color-input-group">
+              <input 
+                type="color" 
+                class="color-picker"
+                [value]="customColors().text"
+                (input)="updateCustomColor('text', $event)"
+              >
+              <input 
+                type="text" 
+                class="color-text"
+                [value]="customColors().text"
+                (input)="updateCustomColor('text', $event)"
+                placeholder="#000000"
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typography Customization -->
+      <div class="section">
+        <h4>Typography</h4>
+        <div class="typography-controls">
+          <div class="control-group">
+            <label>Font Family</label>
+            <select [(ngModel)]="customTypography().fontFamily" (change)="updateTypography()">
+              <option value="Inter, sans-serif">Inter (Modern)</option>
+              <option value="Poppins, sans-serif">Poppins (Friendly)</option>
+              <option value="Source Sans Pro, sans-serif">Source Sans Pro (Professional)</option>
+              <option value="Playfair Display, serif">Playfair Display (Elegant)</option>
+              <option value="Crimson Text, serif">Crimson Text (Classic)</option>
+              <option value="JetBrains Mono, monospace">JetBrains Mono (Tech)</option>
+              <option value="Nunito, sans-serif">Nunito (Rounded)</option>
+              <option value="Lora, serif">Lora (Reading)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label>Font Size</label>
+            <div class="range-control">
+              <input 
+                type="range" 
+                min="14" 
+                max="20" 
+                step="1"
+                [value]="parseInt(customTypography().fontSize)"
+                (input)="updateFontSize($event)"
+              >
+              <span>{{ customTypography().fontSize }}</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>Line Height</label>
+            <div class="range-control">
+              <input 
+                type="range" 
+                min="1.2" 
+                max="2.0" 
+                step="0.1"
+                [value]="customTypography().lineHeight"
+                (input)="updateLineHeight($event)"
+              >
+              <span>{{ customTypography().lineHeight }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layout Customization -->
+      <div class="section">
+        <h4>Layout</h4>
+        <div class="layout-controls">
+          <div class="control-group">
+            <label>Border Radius</label>
+            <div class="range-control">
+              <input 
+                type="range" 
+                min="0" 
+                max="24" 
+                step="2"
+                [value]="parseInt(customLayout().borderRadius)"
+                (input)="updateBorderRadius($event)"
+              >
+              <span>{{ customLayout().borderRadius }}</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>Container Width</label>
+            <select [(ngModel)]="customLayout().containerWidth" (change)="updateLayout()">
+              <option value="1140px">Small (1140px)</option>
+              <option value="1200px">Medium (1200px)</option>
+              <option value="1280px">Large (1280px)</option>
+              <option value="1440px">Extra Large (1440px)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="customizer-actions">
+    <button class="btn btn-outline" (click)="resetToDefault()">
+      <i class="fas fa-undo"></i>
+      Reset
+    </button>
+    <button class="btn btn-primary" (click)="applyTheme()">
+      <i class="fas fa-check"></i>
+      Apply Theme
+    </button>
+  </div>
+</div>

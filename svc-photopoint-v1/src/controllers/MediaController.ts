@@ -1,17 +1,15 @@
 import { Request, Response } from 'express';
-import { blobStorageService, MediaFolder, MediaFile } from '../services/blobStorageService';
-import { MediaRepository } from '../database/repositories/MediaRepository';
+import { blobStorageService } from '../services/blobStorageService';
+import { MediaRepository, MediaFolder, MediaFile } from '../database/repositories/MediaRepository';
+import { AuthenticatedRequest } from '../middleware/auth';
 import multer from 'multer';
 
-// Type for authenticated requests (used for casting)
-interface AuthenticatedRequest extends Request {
-  user: {
-    id: string;
-    email: string;
-    username?: string;
-    fullName?: string;
-    profilePicture?: string;
-  };
+// Conditionally import sharp
+let sharp: any;
+try {
+  sharp = require('sharp');
+} catch (error) {
+  console.warn('Sharp not available - thumbnails will not be generated');
 }
 
 // Configure multer for file uploads
@@ -282,14 +280,19 @@ export class MediaController {
     }
   }
 
-  // Upload files
+  // Upload files - flexible field names
   static uploadFiles = upload.array('files', 10); // Allow up to 10 files
+  static uploadSingleFile = upload.single('file'); // Allow single file upload
+  static uploadAnyField = upload.any(); // Allow any field names
 
   static async handleFileUpload(req: Request, res: Response): Promise<void> {
     try {
-      const files = req.files as Express.Multer.File[];
+      const filesArray = req.files as Express.Multer.File[];
       const { folderId } = req.body;
       const userId = (req as AuthenticatedRequest).user.id;
+      
+      // Handle files from upload.any() - always comes as array
+      const files: Express.Multer.File[] = Array.isArray(filesArray) ? filesArray : [];
       
       if (!files || files.length === 0) {
         res.status(400).json({
@@ -301,6 +304,24 @@ export class MediaController {
 
       // Upload files to blob storage and create database records
       const uploadPromises = files.map(async (file) => {
+        // Validate file properties
+        if (!file || !file.originalname || !file.buffer || !file.size) {
+          throw new Error(`Invalid file properties: ${JSON.stringify({
+            hasFile: !!file,
+            originalname: file?.originalname,
+            hasBuffer: !!file?.buffer,
+            size: file?.size,
+            mimetype: file?.mimetype
+          })}`);
+        }
+
+        console.log('Processing file upload:', {
+          originalname: file.originalname,
+          size: file.size,
+          mimetype: file.mimetype,
+          fieldname: file.fieldname
+        });
+
         // Upload to blob storage
         const blobResult = await blobStorageService.uploadFile(
           file.buffer,
@@ -309,21 +330,82 @@ export class MediaController {
           folderId
         );
 
-        // Create database record
+        console.log('Blob upload result:', {
+          id: blobResult.id,
+          name: blobResult.name,
+          originalName: blobResult.originalName,
+          size: blobResult.size,
+          url: blobResult.url
+        });
+
+        // Generate thumbnail for images
+        let thumbnailUrl = blobResult.url;
+        if (file.mimetype.startsWith('image/') && sharp) {
+          try {
+            // Generate thumbnail using Sharp
+            const thumbnailBuffer = await sharp(file.buffer)
+              .resize(300, 300, { 
+                fit: 'inside',
+                withoutEnlargement: true 
+              })
+              .jpeg({ quality: 80 })
+              .toBuffer();
+
+            // Upload thumbnail
+            const thumbnailName = `thumb_${blobResult.name}`;
+            const thumbnailResult = await blobStorageService.uploadFile(
+              thumbnailBuffer,
+              thumbnailName,
+              'image/jpeg',
+              folderId
+            );
+            thumbnailUrl = thumbnailResult.url;
+          } catch (error) {
+            console.error('Failed to generate thumbnail:', error);
+            // Continue without thumbnail if generation fails
+          }
+        }
+
+        // Create database record with validated properties
         const fileData = {
           folderId: folderId || undefined,
           userId: userId,
-          originalName: file.originalname,
-          fileName: blobResult.name, // Use the blob service generated filename
-          blobPath: blobResult.name, // Use the blob name as path
+          originalName: file.originalname || blobResult.originalName,
+          fileName: blobResult.name,
+          blobPath: blobResult.name,
           blobUrl: blobResult.url,
-          fileSize: file.size,
-          mimeType: file.mimetype,
-          fileType: file.mimetype.startsWith('image/') ? 'image' as const : 'video' as const,
-          isPublic: false // Default to private
+          fileSize: file.size || blobResult.size, // Use original file size, fallback to blob size
+          mimeType: file.mimetype || blobResult.mimeType,
+          fileType: (file.mimetype || blobResult.mimeType).startsWith('image/') ? 'image' as const : 'video' as const,
+          thumbnailUrl: thumbnailUrl !== blobResult.url ? thumbnailUrl : undefined,
+          thumbnailBlobPath: thumbnailUrl !== blobResult.url ? `thumb_${blobResult.name}` : undefined,
+          hasThumbnail: thumbnailUrl !== blobResult.url,
+          isPublic: false
         };
 
-        return MediaController.mediaRepository.createFile(fileData);
+        console.log('Creating database record with:', fileData);
+
+        const savedFile = await MediaController.mediaRepository.createFile(fileData);
+        
+        console.log('Database record created:', {
+          id: savedFile.id,
+          originalName: savedFile.originalName,
+          fileName: savedFile.fileName,
+          fileSize: savedFile.fileSize,
+          mimeType: savedFile.mimeType,
+          blobUrl: savedFile.blobUrl,
+          thumbnailUrl: savedFile.thumbnailUrl,
+          hasThumbnail: savedFile.hasThumbnail
+        });
+        
+        // Return the complete file record with thumbnail information from database
+        return {
+          ...savedFile,
+          // Ensure critical properties are not undefined
+          originalName: savedFile.originalName || file.originalname || 'Unknown',
+          fileName: savedFile.fileName || blobResult.name || 'Unknown',
+          fileSize: savedFile.fileSize || file.size || blobResult.size || 0
+        };
       });
 
       const uploadedFiles = await Promise.all(uploadPromises);
@@ -358,8 +440,7 @@ export class MediaController {
       }
 
       // First get the file details to get blob path for deletion
-      const files = await MediaController.mediaRepository.getFiles(userId);
-      const fileToDelete = files.find(f => f.id === fileId);
+      const fileToDelete = await MediaController.mediaRepository.getFile(userId, fileId);
       
       if (!fileToDelete) {
         res.status(404).json({
@@ -384,6 +465,236 @@ export class MediaController {
       res.status(500).json({
         success: false,
         message: 'Failed to delete file',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  // FR-CMS-018: Check folder sharing permissions
+  static async checkFolderSharingPermission(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as AuthenticatedRequest).user.id;
+      const { folderId, websiteId } = req.params;
+      
+      if (!folderId || !websiteId) {
+        res.status(400).json({
+          success: false,
+          message: 'Folder ID and Website ID are required'
+        });
+        return;
+      }
+
+      // Check if user owns the folder or if it's shared
+      const folders = await MediaController.mediaRepository.getFolders(userId);
+      const folder = folders.find(f => f.id === folderId);
+      
+      if (!folder) {
+        res.status(404).json({
+          success: false,
+          message: 'Folder not found'
+        });
+        return;
+      }
+
+      // For now, assume access is granted if user owns the folder or if it's marked as shared
+      // In a real implementation, you'd check specific sharing permissions
+      const canAccess = folder.userId === userId || folder.allowWebsiteUsage;
+      
+      res.json({
+        success: true,
+        data: {
+          canAccess,
+          isOwner: folder.userId === userId,
+          sharedAt: folder.allowWebsiteUsage ? folder.createdAt : null
+        }
+      });
+    } catch (error) {
+      console.error('Failed to check folder sharing permission:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to check folder permissions',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  // FR-CMS-018: Generate responsive image variants
+  static async generateResponsiveVariants(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as AuthenticatedRequest).user.id;
+      const { photoId } = req.params;
+      const { breakpoints = [320, 640, 1024, 1920] } = req.body;
+      
+      if (!photoId) {
+        res.status(400).json({
+          success: false,
+          message: 'Photo ID is required'
+        });
+        return;
+      }
+
+      // Get the original photo details
+      const files = await MediaController.mediaRepository.getFiles(userId);
+      const photo = files.find(f => f.id === photoId);
+      
+      if (!photo) {
+        res.status(404).json({
+          success: false,
+          message: 'Photo not found'
+        });
+        return;
+      }
+
+      // Generate responsive variants (this would use image processing library like Sharp)
+      const variants = await Promise.all(
+        breakpoints.map(async (width: number) => {
+          // In a real implementation, you'd resize the image and upload the variant
+          // For now, we'll return mock data
+          return {
+            width,
+            url: `${photo.blobUrl}?w=${width}`,
+            size: Math.round(photo.fileSize * (width / 1920)) // Estimated size
+          };
+        })
+      );
+
+      res.json({
+        success: true,
+        data: {
+          variants
+        }
+      });
+    } catch (error) {
+      console.error('Failed to generate responsive variants:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate responsive variants',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  // FR-CMS-018: Get folder permissions and sharing settings
+  static async getFolderPermissions(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as AuthenticatedRequest).user.id;
+      const { folderId } = req.params;
+      
+      if (!folderId) {
+        res.status(400).json({
+          success: false,
+          message: 'Folder ID is required'
+        });
+        return;
+      }
+
+      const folders = await MediaController.mediaRepository.getFolders(userId);
+      const folder = folders.find(f => f.id === folderId);
+      
+      if (!folder) {
+        res.status(404).json({
+          success: false,
+          message: 'Folder not found'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: {
+          isShared: folder.allowWebsiteUsage || false,
+          allowedWebsites: [], // This would be implemented based on your sharing model
+          owner: {
+            id: folder.userId,
+            name: 'User Name' // You'd get this from user repository
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Failed to get folder permissions:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get folder permissions',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  // FR-CMS-018: Enhanced upload with auto-folder creation
+  static async uploadWithAutoFolder(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as AuthenticatedRequest).user.id;
+      const { autoCreateFolder, folderId, generateThumbnails, optimizeForWeb } = req.body;
+      
+      if (!req.file) {
+        res.status(400).json({
+          success: false,
+          message: 'No file provided'
+        });
+        return;
+      }
+
+      let targetFolderId = folderId;
+
+      // Auto-create folder if specified
+      if (autoCreateFolder && !folderId) {
+        try {
+          // Check if folder already exists
+          const existingFolders = await MediaController.mediaRepository.getFolders(userId);
+          const existingFolder = existingFolders.find(f => f.name === autoCreateFolder);
+          
+          if (existingFolder) {
+            targetFolderId = existingFolder.id;
+          } else {
+            // Create new folder
+            const newFolder = await MediaController.mediaRepository.createFolder(autoCreateFolder, userId);
+            targetFolderId = newFolder.id;
+          }
+        } catch (error) {
+          console.error('Failed to auto-create folder:', error);
+          // Continue with upload to default location
+        }
+      }
+
+      // Upload the file
+      const file = req.file;
+      
+      // Upload to blob storage
+      const uploadResult = await blobStorageService.uploadFile(
+        file.buffer, 
+        file.originalname, 
+        file.mimetype, 
+        targetFolderId || undefined
+      );
+
+      // Save file metadata to database
+      const mediaFile = await MediaController.mediaRepository.createFile({
+        originalName: uploadResult.originalName,
+        fileName: uploadResult.name,
+        blobPath: uploadResult.url, // Using url as blobPath for now
+        blobUrl: uploadResult.url,
+        fileSize: uploadResult.size,
+        mimeType: uploadResult.mimeType,
+        fileType: uploadResult.type,
+        folderId: targetFolderId || undefined,
+        userId: userId,
+        isPublic: false
+      });
+
+      // TODO: If generateThumbnails is true, generate thumbnails
+      // TODO: If optimizeForWeb is true, optimize the image
+
+      res.json({
+        success: true,
+        data: {
+          photo: mediaFile
+        }
+      });
+    } catch (error) {
+      console.error('Failed to upload with auto folder:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload file',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }

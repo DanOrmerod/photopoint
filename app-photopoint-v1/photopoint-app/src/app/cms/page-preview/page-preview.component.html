@@ -1,0 +1,28 @@
+<div class="fullscreen-preview">
+  @if (loading()) {
+    <div class="loading-state">
+      <i class="fas fa-spinner fa-spin"></i>
+      <p>Loading preview...</p>
+    </div>
+  } @else if (error()) {
+    <div class="error-state">
+      <i class="fas fa-exclamation-triangle"></i>
+      <p>{{ error() }}</p>
+      <button class="btn btn-primary" (click)="loadPreview()">
+        <i class="fas fa-refresh"></i>
+        Retry
+      </button>
+    </div>
+  } @else {
+    <!-- Preview control bar -->
+    <div class="preview-controls">
+      <div class="preview-badge">PREVIEW</div>
+      <button class="close-preview" (click)="closePreview()">
+        <i class="fas fa-times"></i>
+        Close Preview
+      </button>
+    </div>
+    <!-- Clean website preview without any CMS UI -->
+    <div class="website-preview" [innerHTML]="previewHtml()"></div>
+  }
+</div>

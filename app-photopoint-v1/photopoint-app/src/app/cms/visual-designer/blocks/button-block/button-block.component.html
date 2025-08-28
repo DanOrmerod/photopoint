@@ -1,0 +1,127 @@
+<div class="button-block" [ngStyle]="data.styles">
+  @if (isEditing) {
+    <!-- Button Editor -->
+    <div class="inline-button-editor" (click)="$event.stopPropagation()">
+      <div class="button-editor-grid">
+        <div class="editor-group">
+          <label>Button Text:</label>
+          <input 
+            type="text" 
+            class="form-control"
+            [value]="getContent().text || ''"
+            (input)="updateText($event)"
+            placeholder="Enter button text"
+          />
+        </div>
+        
+        <div class="editor-group">
+          <label>URL:</label>
+          <input 
+            type="url" 
+            class="form-control"
+            [value]="getContent().url || ''"
+            (input)="updateUrl($event)"
+            placeholder="Enter button URL"
+          />
+        </div>
+        
+        <div class="editor-row">
+          <div class="editor-group">
+            <label>Target:</label>
+            <select 
+              class="form-control"
+              [value]="getContent().target || '_self'"
+              (change)="updateTarget($event)"
+            >
+              <option value="_self">Same window</option>
+              <option value="_blank">New window</option>
+            </select>
+          </div>
+          
+          <div class="editor-group">
+            <label>Size:</label>
+            <select 
+              class="form-control"
+              [value]="getContent().size || 'medium'"
+              (change)="updateSize($event)"
+            >
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="editor-row">
+          <div class="editor-group">
+            <label>Style:</label>
+            <select 
+              class="form-control"
+              [value]="getContent().style || 'primary'"
+              (change)="updateStyle($event)"
+            >
+              <option value="primary">Primary</option>
+              <option value="secondary">Secondary</option>
+              <option value="outline">Outline</option>
+            </select>
+          </div>
+          
+          <div class="editor-group">
+            <label>Alignment:</label>
+            <select 
+              class="form-control"
+              [value]="getContent().alignment || 'center'"
+              (change)="updateAlignment($event)"
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="editor-row">
+          <div class="editor-group">
+            <label>Background Color:</label>
+            <input 
+              type="color" 
+              class="form-control color-input"
+              [value]="getContent().backgroundColor || '#3b82f6'"
+              (input)="updateBackgroundColor($event)"
+            />
+          </div>
+          
+          <div class="editor-group">
+            <label>Text Color:</label>
+            <input 
+              type="color" 
+              class="form-control color-input"
+              [value]="getContent().textColor || '#ffffff'"
+              (input)="updateTextColor($event)"
+            />
+          </div>
+        </div>
+      </div>
+      
+      <div class="editor-actions">
+        <button class="btn btn-primary" (click)="finishEditing()">Done</button>
+      </div>
+    </div>
+  } @else {
+    <div 
+      class="button-content" 
+      [style.text-align]="getContent().alignment || 'center'"
+      (dblclick)="startEditing()"
+    >
+      <a 
+        [href]="getContent().url || '#'"
+        [target]="getContent().target || '_self'"
+        class="block-button"
+        [ngClass]="getButtonClasses()"
+        [ngStyle]="getButtonStyles()"
+      >
+        {{ getContent().text || 'Button Text' }}
+      </a>
+    </div>
+  }
+</div>

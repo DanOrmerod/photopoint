@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { HomeComponent } from './home/home.component';
+import { GalleryComponent } from './gallery/gallery.component';
 import { UploadComponent } from './upload/upload.component';
 import { LoginComponent } from './auth/login/login.component';
 import { RegisterComponent } from './auth/register/register.component';
@@ -17,7 +18,8 @@ import { VisualDesignerComponent } from './cms/visual-designer/visual-designer.c
 import { AuthGuard } from './auth/auth.guard';
 
 export const routes: Routes = [
-  { path: '', component: HomeComponent },
+  { path: '', component: GalleryComponent },
+  { path: 'home', component: HomeComponent }, // Keep HomeComponent for websites overview
   { path: 'upload', component: UploadComponent },
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegisterComponent },

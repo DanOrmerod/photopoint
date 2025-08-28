@@ -8,11 +8,14 @@ import { WebsiteService } from './website.service';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <ng-container *ngIf="loading">Loading...</ng-container>
-    <ng-container *ngIf="error">{{ error }}</ng-container>
+    <ng-container *ngIf="loading">
+      <div style="padding: 20px; text-align: center;">Loading...</div>
+    </ng-container>
+    <ng-container *ngIf="error">
+      <div style="padding: 20px; text-align: center; color: red;">{{ error }}</div>
+    </ng-container>
     <ng-container *ngIf="!loading && !error && website">
-      <h1>{{ website.title }}</h1>
-      <div [innerHTML]="website.html"></div>
+      <div [innerHTML]="website.html || getHomePageHtml()"></div>
     </ng-container>
   `
 })
@@ -35,13 +38,21 @@ export class WebsiteViewerComponent implements OnInit {
       if (pageSlug && pageSlug !== 'home') {
         // Load specific page
         this.websiteService.getPublishedPage(domain, pageSlug).subscribe({
-          next: (data) => { this.website = data; this.loading = false; },
+          next: (data) => { 
+            // Backend now returns {html: "rendered content"} format
+            this.website = data; 
+            this.loading = false; 
+          },
           error: (err) => { this.error = 'Page not found.'; this.loading = false; }
         });
       } else {
         // Load home page or website
         this.websiteService.getPublishedWebsite(domain).subscribe({
-          next: (data) => { this.website = data; this.loading = false; },
+          next: (data) => { 
+            // Backend now returns {html: "rendered content"} format
+            this.website = data; 
+            this.loading = false; 
+          },
           error: (err) => { this.error = 'Website not found.'; this.loading = false; }
         });
       }
@@ -63,5 +74,11 @@ export class WebsiteViewerComponent implements OnInit {
     
     // For custom domains: use the full hostname
     return hostname;
+  }
+
+  getHomePageHtml(): string {
+    // Since backend now returns {html: "content"} format directly,
+    // this method serves as a fallback for empty/missing content
+    return '<h1>Welcome</h1><p>This website is under construction.</p>';
   }
 }

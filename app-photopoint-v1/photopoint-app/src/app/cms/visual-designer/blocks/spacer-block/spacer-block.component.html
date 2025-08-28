@@ -1,0 +1,33 @@
+<div class="spacer-block" [ngStyle]="data.styles">
+  @if (isEditing) {
+    <!-- Spacer Editor -->
+    <div class="inline-spacer-editor" (click)="$event.stopPropagation()">
+      <div class="spacer-editor-content">
+        <div class="editor-group">
+          <label>Height:</label>
+          <input 
+            type="text" 
+            class="form-control"
+            [value]="getContent().height || '40px'"
+            (input)="updateHeight($event)"
+            placeholder="e.g., 40px, 2rem, 10vh"
+          />
+        </div>
+        
+        <div class="editor-actions">
+          <button class="btn btn-primary" (click)="finishEditing()">Done</button>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div 
+      class="spacer-content" 
+      [style.height]="getContent().height || '40px'"
+      (dblclick)="startEditing()"
+    >
+      <div class="spacer-indicator">
+        <span>Spacer ({{ getContent().height || '40px' }})</span>
+      </div>
+    </div>
+  }
+</div>
