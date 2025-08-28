@@ -725,4 +725,74 @@ export class MediaController {
       });
     }
   }
+
+  // Serve media files securely through our backend
+  static async serveFile(req: Request, res: Response): Promise<void> {
+    try {
+      const { fileId } = req.params;
+      const { type = 'original' } = req.query; // 'original' or 'thumbnail'
+      const userId = (req as AuthenticatedRequest).user.id;
+      
+      if (!fileId) {
+        res.status(400).json({
+          success: false,
+          message: 'File ID is required'
+        });
+        return;
+      }
+
+      // Get the file record to verify ownership and get blob path
+      const file = await MediaController.mediaRepository.getFile(userId, fileId);
+      
+      if (!file) {
+        res.status(404).json({
+          success: false,
+          message: 'File not found or access denied'
+        });
+        return;
+      }
+
+      // Determine which file to serve
+      let blobPath: string;
+      let mimeType: string;
+      
+      if (type === 'thumbnail' && file.hasThumbnail && file.thumbnailBlobPath) {
+        blobPath = file.thumbnailBlobPath;
+        mimeType = 'image/jpeg'; // Thumbnails are always JPEG
+      } else {
+        blobPath = file.blobPath;
+        mimeType = file.mimeType;
+      }
+
+      // Get the file from blob storage
+      const blobData = await blobStorageService.getFileBuffer(blobPath, file.folderId);
+      
+      if (!blobData) {
+        res.status(404).json({
+          success: false,
+          message: 'File content not found'
+        });
+        return;
+      }
+
+      // Set appropriate headers
+      res.set({
+        'Content-Type': mimeType,
+        'Content-Length': blobData.length.toString(),
+        'Cache-Control': 'private, max-age=3600', // Cache for 1 hour, but private
+        'ETag': `"${file.id}-${type}"`,
+        'Content-Disposition': type === 'thumbnail' ? 'inline' : `inline; filename="${file.originalName}"`
+      });
+
+      // Send the file data
+      res.send(blobData);
+    } catch (error) {
+      console.error('Failed to serve file:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to serve file',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
 }

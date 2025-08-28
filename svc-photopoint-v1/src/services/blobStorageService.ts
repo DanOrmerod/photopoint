@@ -128,6 +128,33 @@ export class BlobStorageService {
     }
   }
 
+  async getFileBuffer(blobPath: string, folderId?: string): Promise<Buffer | null> {
+    try {
+      const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
+      
+      // Construct the full blob path
+      const fullPath = folderId && !blobPath.startsWith('folders/') 
+        ? `folders/${folderId}/${blobPath}` 
+        : blobPath;
+      
+      const blobClient = containerClient.getBlobClient(fullPath);
+      
+      // Check if blob exists
+      const exists = await blobClient.exists();
+      if (!exists) {
+        console.log(`Blob not found: ${fullPath}`);
+        return null;
+      }
+      
+      // Download the blob as a buffer
+      const downloadResponse = await blobClient.downloadToBuffer();
+      return downloadResponse;
+    } catch (error) {
+      console.error('Failed to get file buffer:', error);
+      return null;
+    }
+  }
+
   async listFiles(folderId?: string): Promise<MediaFile[]> {
     try {
       const containerClient = this.blobServiceClient.getContainerClient(this.containerName);

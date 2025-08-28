@@ -24,6 +24,7 @@ router.get('/folders/:folderId/permissions', MediaController.getFolderWebsitePer
 // File routes
 router.get('/files', MediaController.getFiles);
 router.get('/photos', MediaController.getFiles); // Alias for photos
+router.get('/files/:fileId/serve', MediaController.serveFile); // Secure file serving
 router.post('/upload', MediaController.uploadAnyField, MediaController.handleFileUpload);
 router.post('/upload-multiple', MediaController.uploadFiles, MediaController.handleFileUpload);
 router.delete('/files/:fileId', MediaController.deleteFile);
