@@ -1,10 +1,11 @@
-import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, inject, signal, computed, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseBlockData, BaseBlockComponent } from '../base-block.interface';
 import { PhotoService, Photo } from '../../../../services/photo.service';
 import { MediaLibraryService } from '../../../../services/media-library.service';
-import { MediaFolder, MediaFile, photoToMediaFile } from '../../../../models/media.model';
+import { MediaFolder, MediaFile, photoToMediaFile, getSecureMediaUrl, getSecureThumbnailUrl } from '../../../../models/media.model';
+import { switchMap, of } from 'rxjs';
 
 interface TextOverlay {
   text: string;
@@ -62,7 +63,7 @@ interface ImageContent {
   templateUrl: './image-block.component.html',
   styleUrls: ['./image-block.component.scss']
 })
-export class ImageBlockComponent implements BaseBlockComponent {
+export class ImageBlockComponent implements BaseBlockComponent, OnDestroy {
   @Input() data!: BaseBlockData;
   @Input() isEditing = false;
   @Input() isSelected = false;
@@ -73,6 +74,19 @@ export class ImageBlockComponent implements BaseBlockComponent {
 
   private photoService = inject(PhotoService);
   private mediaLibraryService = inject(MediaLibraryService);
+  
+  // Signals for authenticated image URLs
+  private selectedMediaFile = signal<MediaFile | null>(null);
+  private imageBlobUrl = signal<string | null>(null);
+  
+  // Computed property for the display image URL
+  imageUrl = computed(() => {
+    const content = this.getContent();
+    const blobUrl = this.imageBlobUrl();
+    
+    // Use blob URL if available, otherwise fall back to direct src
+    return blobUrl || content.src || '';
+  });
   
   showMediaLibrary = false;
   showUploadDialog = false;
@@ -312,7 +326,13 @@ export class ImageBlockComponent implements BaseBlockComponent {
   selectImageFromLibrary(photo: Photo) {
     // Convert Photo to MediaFile to handle property differences
     const mediaFile = photoToMediaFile(photo);
-    this.updateContent('src', mediaFile.blobUrl);
+    
+    // Load the authenticated image
+    this.loadAuthenticatedImage(mediaFile as MediaFile);
+    
+    // Store the secure URL in the content for reference, but don't use it directly for display
+    const secureUrl = getSecureMediaUrl(mediaFile as MediaFile, 'original');
+    this.updateContent('src', secureUrl);
     this.updateContent('alt', mediaFile.originalName);
     this.updateContent('lazyLoading', true); // Enable lazy loading for performance
     this.showMediaLibrary = false;
@@ -387,6 +407,21 @@ export class ImageBlockComponent implements BaseBlockComponent {
       backgroundColor: content.overlay.color || 'transparent',
       opacity: content.overlay.opacity || 0
     };
+  }
+
+  // Load authenticated image when media file is selected
+  private loadAuthenticatedImage(mediaFile: MediaFile) {
+    this.selectedMediaFile.set(mediaFile);
+    
+    // Get secure URL for the main image
+    const secureUrl = getSecureMediaUrl(mediaFile);
+    
+    // Use the secure URL directly instead of creating blob URLs
+    this.imageBlobUrl.set(secureUrl);
+  }
+
+  ngOnDestroy() {
+    // No need to clean up blob URLs since we're using secure URLs directly
   }
 
   private updateContent(field: keyof ImageContent, value: any) {

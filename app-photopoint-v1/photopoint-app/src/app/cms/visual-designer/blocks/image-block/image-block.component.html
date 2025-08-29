@@ -468,7 +468,7 @@
       [style.text-align]="getContent().alignment || 'center'"
       (dblclick)="startEditing()"
     >
-      @if (getContent().src) {
+      @if (imageUrl()) {
         <div class="image-container" [style.position]="'relative'">
           <!-- Color Overlay -->
           @if (getContent().overlay && (getContent().overlay?.opacity || 0) > 0) {
@@ -477,11 +477,12 @@
           
           <!-- Main Image -->
           <img 
-            [src]="getContent().src" 
+            [src]="imageUrl()" 
             [alt]="getContent().alt || 'Image'"
             [ngStyle]="getImageStyles()"
             class="block-image"
             [loading]="getContent().lazyLoading ? 'lazy' : 'eager'"
+            [decoding]="'async'"
           />
           
           <!-- Text Overlays -->

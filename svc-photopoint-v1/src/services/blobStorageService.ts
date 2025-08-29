@@ -287,6 +287,42 @@ export class BlobStorageService {
       return 0;
     }
   }
+
+  async copyBlob(sourceBlobName: string, destinationBlobName: string): Promise<void> {
+    try {
+      const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
+      
+      const sourceBlobClient = containerClient.getBlobClient(sourceBlobName);
+      const destinationBlobClient = containerClient.getBlobClient(destinationBlobName);
+      
+      // Copy the blob
+      const copyOperation = await destinationBlobClient.syncCopyFromURL(sourceBlobClient.url);
+      
+      if (copyOperation.copyStatus !== 'success') {
+        throw new Error(`Failed to copy blob: ${copyOperation.copyStatus}`);
+      }
+      
+      console.log(`Successfully copied blob from ${sourceBlobName} to ${destinationBlobName}`);
+    } catch (error) {
+      console.error('Failed to copy blob:', error);
+      throw error;
+    }
+  }
+
+  async moveBlob(sourceBlobName: string, destinationBlobName: string): Promise<void> {
+    try {
+      // First copy the blob
+      await this.copyBlob(sourceBlobName, destinationBlobName);
+      
+      // Then delete the source blob
+      await this.deleteFile(sourceBlobName);
+      
+      console.log(`Successfully moved blob from ${sourceBlobName} to ${destinationBlobName}`);
+    } catch (error) {
+      console.error('Failed to move blob:', error);
+      throw error;
+    }
+  }
 }
 
 export const blobStorageService = new BlobStorageService();

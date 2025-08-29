@@ -1,19 +1,21 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, signal, inject, OnInit, OnDestroy, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { MediaFile, MediaFolder } from '../models/media.model';
+import { MediaFile, MediaFolder, getSecureThumbnailUrl, getSecureMediaUrl } from '../models/media.model';
+import { ImageModalComponent } from '../components/image-modal/image-modal.component';
+import { map, switchMap, forkJoin, of } from 'rxjs';
 
 // Remove duplicate interfaces since they're now in the shared model
 
 @Component({
   selector: 'app-gallery',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ImageModalComponent],
   templateUrl: './gallery.component.html',
   styleUrls: ['./gallery.component.scss']
 })
-export class GalleryComponent implements OnInit {
+export class GalleryComponent implements OnInit, OnDestroy {
   // State management
   folders = signal<MediaFolder[]>([]);
   files = signal<MediaFile[]>([]);
@@ -28,6 +30,28 @@ export class GalleryComponent implements OnInit {
   newFolderName = signal('');
   dragOver = signal(false);
   uploading = signal(false);
+
+  // Multi-selection state
+  selectedFiles = signal<Set<string>>(new Set());
+  selectionMode = signal(false);
+
+  // Copy/Move modal state
+  showCopyMoveModal = signal(false);
+  copyMoveAction = signal<'copy' | 'move'>('copy');
+
+  // Image modal state
+  showImageModal = signal(false);
+  modalImages = signal<MediaFile[]>([]);
+  modalCurrentIndex = signal(0);
+
+  // Authenticated image URLs
+  authenticatedThumbnails = signal<Map<string, string>>(new Map());
+  
+  // Computed property for available destination folders
+  availableFolders = computed(() => {
+    const current = this.selectedFolderId();
+    return this.folders().filter(folder => folder.id !== current);
+  });
 
   constructor(private http: HttpClient) {}
 
@@ -93,7 +117,32 @@ export class GalleryComponent implements OnInit {
   // File management
   async selectFolder(folderId: string) {
     this.selectedFolderId.set(folderId);
+    
+    // Set the selected folder object
+    const folder = this.folders().find(f => f.id === folderId);
+    this.selectedFolder.set(folder || null);
+    
     await this.loadFiles(folderId);
+  }
+
+  // Helper method to update folder file count
+  private updateFolderCount(folderId: string, countChange: number) {
+    this.folders.update(folders => 
+      folders.map(folder => 
+        folder.id === folderId 
+          ? { ...folder, fileCount: Math.max(0, folder.fileCount + countChange) }
+          : folder
+      )
+    );
+
+    // Also update selectedFolder if it matches
+    const selectedFolder = this.selectedFolder();
+    if (selectedFolder && selectedFolder.id === folderId) {
+      this.selectedFolder.set({
+        ...selectedFolder,
+        fileCount: Math.max(0, selectedFolder.fileCount + countChange)
+      });
+    }
   }
 
   async loadFiles(folderId: string) {
@@ -102,13 +151,52 @@ export class GalleryComponent implements OnInit {
     try {
       const url = folderId ? `/api/v1/media/files?folderId=${folderId}` : '/api/v1/media/files';
       const response = await this.http.get<{success: boolean, data: MediaFile[]}>(url).toPromise();
-      this.files.set(response?.data || []);
+      const files = response?.data || [];
+      this.files.set(files);
+      
+      // Load authenticated thumbnails for the files
+      this.loadAuthenticatedThumbnails(files);
     } catch (error) {
       console.error('Failed to load files:', error);
       this.error.set('Failed to load files');
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private loadAuthenticatedThumbnails(files: MediaFile[], clearExisting: boolean = true) {
+    if (clearExisting) {
+      // Clear existing thumbnails only when explicitly requested
+      this.authenticatedThumbnails.set(new Map());
+    }
+
+    // Load new thumbnails
+    files.forEach(file => {
+      // Skip if thumbnail already exists (unless we're clearing)
+      if (!clearExisting && this.authenticatedThumbnails().has(file.id)) {
+        return;
+      }
+
+      const secureUrl = getSecureThumbnailUrl(file);
+      
+      // Skip files without thumbnails - don't load full images
+      if (!secureUrl) {
+        console.log(`Skipping file ${file.fileName} - no thumbnail available`);
+        return;
+      }
+      
+      // Use the secure URL directly instead of creating blob URLs
+      this.authenticatedThumbnails.update(map => {
+        const newMap = new Map(map);
+        newMap.set(file.id, secureUrl);
+        return newMap;
+      });
+    });
+  }
+
+  // Get authenticated thumbnail URL for display
+  getThumbnailUrl(fileId: string): string {
+    return this.authenticatedThumbnails().get(fileId) || '';
   }
 
   async deleteFile(fileId: string) {
@@ -118,7 +206,16 @@ export class GalleryComponent implements OnInit {
 
     try {
       await this.http.delete(`/api/v1/media/files/${fileId}`).toPromise();
+      
+      // Find the file to get its folder ID before removing it
+      const fileToDelete = this.files().find(f => f.id === fileId);
+      
       this.files.update(files => files.filter(f => f.id !== fileId));
+      
+      // Update folder count
+      if (fileToDelete?.folderId) {
+        this.updateFolderCount(fileToDelete.folderId, -1);
+      }
     } catch (error) {
       console.error('Failed to delete file:', error);
       this.error.set('Failed to delete file');
@@ -189,6 +286,13 @@ export class GalleryComponent implements OnInit {
       const response = await this.http.post<{success: boolean, data: MediaFile[]}>('/api/v1/media/upload', formData).toPromise();
       if (response?.data) {
         this.files.update(files => [...files, ...response.data]);
+        // Load authenticated thumbnails for the newly uploaded files (don't clear existing ones)
+        this.loadAuthenticatedThumbnails(response.data, false);
+        
+        // Update folder count
+        if (folderId) {
+          this.updateFolderCount(folderId, response.data.length);
+        }
       }
     } catch (error) {
       console.error('Failed to upload files:', error);
@@ -215,6 +319,16 @@ export class GalleryComponent implements OnInit {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
+  // Get secure thumbnail URL that goes through our backend
+  getSecureThumbnailUrl(file: MediaFile): string {
+    return getSecureThumbnailUrl(file) || '';
+  }
+
+  // Get secure original file URL that goes through our backend
+  getSecureFileUrl(file: MediaFile): string {
+    return getSecureMediaUrl(file, 'original');
+  }
+
   openCreateFolderModal() {
     this.showCreateFolderModal.set(true);
     this.newFolderName.set('');
@@ -227,7 +341,7 @@ export class GalleryComponent implements OnInit {
 
   async copyFileUrl(file: MediaFile) {
     try {
-      await navigator.clipboard.writeText(file.blobUrl);
+      await navigator.clipboard.writeText(this.getSecureFileUrl(file));
       // Could add a toast notification here later
       console.log('File URL copied to clipboard');
     } catch (error) {
@@ -272,5 +386,178 @@ export class GalleryComponent implements OnInit {
       console.error('Failed to update folder settings:', error);
       this.error.set('Failed to update folder settings');
     }
+  }
+
+  // Image modal methods
+  openImageModal(clickedFile: MediaFile) {
+    // Get all image files from current folder
+    const imageFiles = this.files().filter(file => file.fileType === 'image');
+    
+    // Find the index of the clicked file
+    const currentIndex = imageFiles.findIndex(file => file.id === clickedFile.id);
+    
+    this.modalImages.set(imageFiles);
+    this.modalCurrentIndex.set(Math.max(0, currentIndex));
+    this.showImageModal.set(true);
+  }
+
+  closeImageModal() {
+    this.showImageModal.set(false);
+  }
+
+  onModalIndexChange(newIndex: number) {
+    this.modalCurrentIndex.set(newIndex);
+  }
+
+  // Multi-selection methods
+  toggleSelectionMode() {
+    this.selectionMode.update(mode => !mode);
+    if (!this.selectionMode()) {
+      this.selectedFiles.set(new Set());
+    }
+  }
+
+  toggleFileSelection(fileId: string, event?: Event) {
+    if (event) {
+      event.stopPropagation(); // Prevent opening the image modal
+    }
+    
+    this.selectedFiles.update(selected => {
+      const newSelected = new Set(selected);
+      if (newSelected.has(fileId)) {
+        newSelected.delete(fileId);
+      } else {
+        newSelected.add(fileId);
+      }
+      return newSelected;
+    });
+  }
+
+  selectAllFiles() {
+    const allFileIds = this.files().map(file => file.id);
+    this.selectedFiles.set(new Set(allFileIds));
+  }
+
+  clearSelection() {
+    this.selectedFiles.set(new Set());
+  }
+
+  isFileSelected(fileId: string): boolean {
+    return this.selectedFiles().has(fileId);
+  }
+
+  get selectedCount(): number {
+    return this.selectedFiles().size;
+  }
+
+  async deleteSelectedFiles() {
+    const selectedIds = Array.from(this.selectedFiles());
+    if (selectedIds.length === 0) return;
+
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} file(s)?`)) {
+      return;
+    }
+
+    try {
+      // Delete all selected files
+      const deletePromises = selectedIds.map(fileId => 
+        this.http.delete(`/api/v1/media/files/${fileId}`).toPromise()
+      );
+      
+      await Promise.all(deletePromises);
+
+      // Remove deleted files from the list
+      this.files.update(files => files.filter(file => !selectedIds.includes(file.id)));
+      
+      // Update folder count
+      const folderId = this.selectedFolderId();
+      if (folderId) {
+        this.updateFolderCount(folderId, -selectedIds.length);
+      }
+      
+      // Clear selection
+      this.clearSelection();
+      this.selectionMode.set(false);
+      
+    } catch (error) {
+      console.error('Failed to delete files:', error);
+      this.error.set('Failed to delete selected files');
+    }
+  }
+
+  // Helper method to handle clicks on file cards
+  onFileCardClick(file: MediaFile, event: Event) {
+    if (this.selectionMode()) {
+      this.toggleFileSelection(file.id, event);
+    } else if (file.fileType === 'image') {
+      this.openImageModal(file);
+    }
+  }
+
+  // Copy/Move methods
+  openCopyMoveModal(action: 'copy' | 'move') {
+    this.copyMoveAction.set(action);
+    this.showCopyMoveModal.set(true);
+  }
+
+  closeCopyMoveModal() {
+    this.showCopyMoveModal.set(false);
+  }
+
+  async copyOrMoveFiles(targetFolderId: string) {
+    const selectedIds = Array.from(this.selectedFiles());
+    const action = this.copyMoveAction();
+    
+    if (selectedIds.length === 0) return;
+
+    try {
+      const endpoint = action === 'copy' ? 'copy' : 'move';
+      const response = await this.http.post<{success: boolean, data: MediaFile[]}>(
+        `/api/v1/media/files/${endpoint}`, 
+        {
+          fileIds: selectedIds,
+          targetFolderId: targetFolderId
+        }
+      ).toPromise();
+
+      if (response?.success) {
+        if (action === 'move') {
+          // Remove moved files from current folder
+          this.files.update(files => files.filter(file => !selectedIds.includes(file.id)));
+          
+          // Update current folder count
+          const currentFolderId = this.selectedFolderId();
+          if (currentFolderId) {
+            this.updateFolderCount(currentFolderId, -selectedIds.length);
+          }
+        }
+        
+        // Update target folder count
+        this.updateFolderCount(targetFolderId, selectedIds.length);
+        
+        // Clear selection
+        this.clearSelection();
+        this.selectionMode.set(false);
+        this.closeCopyMoveModal();
+        
+        // Refresh the current folder to reflect changes
+        const currentFolderId = this.selectedFolderId();
+        if (currentFolderId) {
+          await this.loadFiles(currentFolderId);
+        }
+        
+        // Show success message
+        const actionText = action === 'copy' ? 'copied' : 'moved';
+        console.log(`Successfully ${actionText} ${selectedIds.length} files`);
+      }
+    } catch (error) {
+      console.error(`Failed to ${action} files:`, error);
+      this.error.set(`Failed to ${action} selected files`);
+    }
+  }
+
+  ngOnDestroy() {
+    // No blob URL cleanup needed since we're using secure URLs directly
+    this.authenticatedThumbnails.set(new Map());
   }
 }

@@ -141,6 +141,66 @@
         </div>
 
         <!-- Files Grid -->
+        @if (selectedFolderId()) {
+          <!-- Selection Toolbar -->
+          <div class="selection-toolbar">
+            <div class="selection-controls">
+              <button 
+                class="btn btn-sm"
+                [class.btn-primary]="!selectionMode()"
+                [class.btn-secondary]="selectionMode()"
+                (click)="toggleSelectionMode()">
+                @if (selectionMode()) {
+                  <i class="fas fa-times"></i>
+                  Cancel Selection
+                } @else {
+                  <i class="fas fa-check-square"></i>
+                  Select Files
+                }
+              </button>
+              
+              @if (selectionMode()) {
+                <div class="selection-actions">
+                  <span class="selection-count">{{ selectedCount }} selected</span>
+                  <button 
+                    class="btn btn-sm btn-outline" 
+                    (click)="selectAllFiles()"
+                    [disabled]="selectedCount === files().length">
+                    Select All
+                  </button>
+                  <button 
+                    class="btn btn-sm btn-outline" 
+                    (click)="clearSelection()"
+                    [disabled]="selectedCount === 0">
+                    Clear
+                  </button>
+                  <button 
+                    class="btn btn-sm btn-danger" 
+                    (click)="deleteSelectedFiles()"
+                    [disabled]="selectedCount === 0">
+                    <i class="fas fa-trash"></i>
+                    Delete Selected
+                  </button>
+                  <button 
+                    class="btn btn-sm btn-primary" 
+                    (click)="openCopyMoveModal('copy')"
+                    [disabled]="selectedCount === 0">
+                    <i class="fas fa-copy"></i>
+                    Copy to Folder
+                  </button>
+                  <button 
+                    class="btn btn-sm btn-secondary" 
+                    (click)="openCopyMoveModal('move')"
+                    [disabled]="selectedCount === 0">
+                    <i class="fas fa-arrows-alt"></i>
+                    Move to Folder
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         @if (loading()) {
           <div class="loading-state">
             <div class="loading-spinner"></div>
@@ -155,18 +215,77 @@
         } @else {
           <div class="files-grid">
             @for (file of files(); track file.id) {
-              <div class="file-card">
+              <div class="file-card" 
+                   [class.selected]="selectionMode() && isFileSelected(file.id)"
+                   (click)="onFileCardClick(file, $event)">
+                
+                <!-- Selection checkbox (only visible in selection mode) -->
+                @if (selectionMode()) {
+                  <div class="selection-checkbox">
+                    <input 
+                      type="checkbox" 
+                      [checked]="isFileSelected(file.id)"
+                      (click)="toggleFileSelection(file.id, $event)"
+                      (change)="$event.stopPropagation()">
+                  </div>
+                }
+                
                 <div class="file-preview">
                   @if (file.fileType === 'image') {
-                    <img [src]="file.thumbnailUrl" [alt]="file.originalName" />
+                    @if (getThumbnailUrl(file.id)) {
+                      <img 
+                        [src]="getThumbnailUrl(file.id)" 
+                        [alt]="file.originalName"
+                        loading="lazy"
+                        decoding="async"
+                        [style.cursor]="selectionMode() ? 'pointer' : 'pointer'"
+                      />
+                    } @else {
+                      <!-- No thumbnail available - show placeholder -->
+                      <div class="no-thumbnail-placeholder">
+                        <i class="fas fa-image"></i>
+                        <span>No Preview</span>
+                      </div>
+                    }
                   } @else {
                     <div class="video-thumbnail">
-                      <img [src]="file.thumbnailUrl" [alt]="file.originalName" />
+                      @if (getThumbnailUrl(file.id)) {
+                        <img 
+                          [src]="getThumbnailUrl(file.id)" 
+                          [alt]="file.originalName"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      } @else {
+                        <!-- No thumbnail available - show placeholder -->
+                        <div class="no-thumbnail-placeholder">
+                          <i class="fas fa-video"></i>
+                          <span>No Preview</span>
+                        </div>
+                      }
                       <div class="video-overlay">
                         <i class="fas fa-play"></i>
                       </div>
                     </div>
                   }
+                  
+                  <!-- Overlay actions -->
+                  <div class="file-actions-overlay">
+                    <button 
+                      class="btn-icon btn-secondary" 
+                      title="Copy URL"
+                      (click)="copyFileUrl(file); $event.stopPropagation()"
+                    >
+                      <i class="fas fa-copy"></i>
+                    </button>
+                    <button 
+                      class="btn-icon btn-danger" 
+                      title="Delete file"
+                      (click)="deleteFile(file.id); $event.stopPropagation()"
+                    >
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
                 </div>
                 <div class="file-info">
                   <div class="file-name" [title]="file.originalName">{{ file.originalName }}</div>
@@ -176,22 +295,6 @@
                       <i [class]="getFileIcon(file)"></i>
                     </span>
                   </div>
-                </div>
-                <div class="file-actions">
-                  <button 
-                    class="btn-icon btn-secondary" 
-                    title="Copy URL"
-                    (click)="copyFileUrl(file)"
-                  >
-                    <i class="fas fa-copy"></i>
-                  </button>
-                  <button 
-                    class="btn-icon btn-danger" 
-                    title="Delete file"
-                    (click)="deleteFile(file.id)"
-                  >
-                    <i class="fas fa-trash"></i>
-                  </button>
                 </div>
               </div>
             }
@@ -352,3 +455,61 @@
     </div>
   </div>
 }
+
+<!-- Copy/Move Modal -->
+@if (showCopyMoveModal()) {
+  <div class="modal-overlay" (click)="closeCopyMoveModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ copyMoveAction() === 'copy' ? 'Copy' : 'Move' }} Files to Folder</h3>
+        <button class="btn-close" (click)="closeCopyMoveModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <p class="modal-description">
+          Select a destination folder to {{ copyMoveAction() }} {{ selectedCount }} selected file(s).
+          @if (copyMoveAction() === 'move') {
+            <br><strong>Note:</strong> Files will be removed from the current folder.
+          }
+        </p>
+        
+        <div class="folder-selection">
+          <h4>Available Folders:</h4>
+          <div class="folder-list">
+            @for (folder of availableFolders(); track folder.id) {
+              <button 
+                class="folder-option"
+                (click)="copyOrMoveFiles(folder.id)">
+                <i class="fas fa-folder"></i>
+                <span>{{ folder.name }}</span>
+                <span class="file-count">({{ folder.fileCount }} files)</span>
+              </button>
+            }
+          </div>
+          
+          @if (availableFolders().length === 0) {
+            <div class="empty-state">
+              <i class="fas fa-folder-open"></i>
+              <p>No other folders available. Create a new folder first.</p>
+              <button class="btn btn-primary" (click)="closeCopyMoveModal(); openCreateFolderModal()">
+                <i class="fas fa-folder-plus"></i>
+                Create New Folder
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Image Modal -->
+<app-image-modal
+  [images]="modalImages"
+  [currentIndex]="modalCurrentIndex"
+  [isVisible]="showImageModal"
+  (close)="closeImageModal()"
+  (indexChange)="onModalIndexChange($event)">
+</app-image-modal>

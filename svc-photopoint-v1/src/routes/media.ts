@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { MediaController } from '../controllers/MediaController';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -28,5 +28,9 @@ router.get('/files/:fileId/serve', MediaController.serveFile); // Secure file se
 router.post('/upload', MediaController.uploadAnyField, MediaController.handleFileUpload);
 router.post('/upload-multiple', MediaController.uploadFiles, MediaController.handleFileUpload);
 router.delete('/files/:fileId', MediaController.deleteFile);
+
+// File operations
+router.post('/files/copy', MediaController.copyFiles);
+router.post('/files/move', MediaController.moveFiles);
 
 export default router;

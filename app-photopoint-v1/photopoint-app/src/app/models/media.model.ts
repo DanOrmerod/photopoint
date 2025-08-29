@@ -100,3 +100,16 @@ export function photoToMediaFile(photo: Photo): Partial<MediaFile> {
     fileType: photo.mimeType.startsWith('image/') ? 'image' : 'video'
   };
 }
+
+// Utility functions for secure media serving
+export function getSecureMediaUrl(file: MediaFile, type: 'original' | 'thumbnail' = 'original'): string {
+  return `/api/v1/media/files/${file.id}/serve?type=${type}`;
+}
+
+export function getSecureThumbnailUrl(file: MediaFile): string | null {
+  // Only return thumbnail URL if the file actually has a thumbnail
+  // Don't fallback to original image to avoid loading full-size images in gallery
+  return file.hasThumbnail 
+    ? getSecureMediaUrl(file, 'thumbnail')
+    : null; // Return null for files without thumbnails
+}

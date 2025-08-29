@@ -516,4 +516,143 @@ export class MediaRepository {
       updatedAt: row.updated_at
     };
   }
+
+  async getFolderById(folderId: string, userId: string): Promise<MediaFolder | null> {
+    const pool = await getDbConnection();
+    const request = new Request(pool);
+    
+    const result = await request
+      .input('folderId', folderId)
+      .input('userId', userId)
+      .query(`
+        SELECT 
+          f.id,
+          f.name,
+          f.parent_id,
+          f.user_id,
+          f.allow_website_usage,
+          f.website_usage_permissions,
+          f.description,
+          f.tags,
+          f.created_at,
+          f.updated_at,
+          COUNT(mf.id) as file_count
+        FROM media_folders f
+        LEFT JOIN media_files mf ON f.id = mf.folder_id AND mf.is_deleted = 0
+        WHERE f.id = @folderId 
+          AND f.user_id = @userId 
+          AND f.is_deleted = 0
+        GROUP BY f.id, f.name, f.parent_id, f.user_id, f.allow_website_usage, f.website_usage_permissions, f.description, f.tags, f.created_at, f.updated_at
+      `);
+
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    const row = result.recordset[0];
+    return {
+      id: row.id,
+      name: row.name,
+      parentId: row.parent_id,
+      userId: row.user_id,
+      allowWebsiteUsage: row.allow_website_usage,
+      websiteUsagePermissions: row.website_usage_permissions,
+      description: row.description,
+      tags: row.tags ? JSON.parse(row.tags) : undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      fileCount: row.file_count
+    };
+  }
+
+  async updateFile(fileId: string, updates: Partial<Pick<MediaFile, 'folderId' | 'blobPath' | 'blobUrl' | 'thumbnailBlobPath' | 'hasThumbnail'>>): Promise<MediaFile | null> {
+    const pool = await getDbConnection();
+    const request = new Request(pool);
+    
+    const setParts: string[] = [];
+    const params: Record<string, any> = {}; // Don't include fileId in params
+
+    if (updates.folderId !== undefined) {
+      setParts.push('folder_id = @folderId');
+      params.folderId = updates.folderId;
+    }
+
+    if (updates.blobPath !== undefined) {
+      setParts.push('blob_path = @blobPath');
+      params.blobPath = updates.blobPath;
+    }
+
+    if (updates.blobUrl !== undefined) {
+      setParts.push('blob_url = @blobUrl');
+      params.blobUrl = updates.blobUrl;
+    }
+
+    if (updates.thumbnailBlobPath !== undefined) {
+      setParts.push('thumbnail_blob_path = @thumbnailBlobPath');
+      params.thumbnailBlobPath = updates.thumbnailBlobPath;
+    }
+
+    if (updates.hasThumbnail !== undefined) {
+      setParts.push('has_thumbnail = @hasThumbnail');
+      params.hasThumbnail = updates.hasThumbnail;
+    }
+
+    if (setParts.length === 0) {
+      // No updates to make
+      return await this.getFileById(fileId, ''); // We'll need to get userId somehow
+    }
+
+    setParts.push('updated_at = GETUTCDATE()');
+
+    // Add fileId first, then other params
+    request.input('fileId', fileId);
+    for (const [key, value] of Object.entries(params)) {
+      request.input(key, value);
+    }
+
+    await request.query(`
+      UPDATE media_files 
+      SET ${setParts.join(', ')}
+      WHERE id = @fileId AND is_deleted = 0
+    `);
+
+    // Return the updated file - create a new request to avoid parameter duplication
+    const selectRequest = new Request(pool);
+    const result = await selectRequest
+      .input('fileId', fileId)
+      .query(`
+        SELECT * FROM media_files 
+        WHERE id = @fileId AND is_deleted = 0
+      `);
+
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    const row = result.recordset[0];
+    return {
+      id: row.id,
+      folderId: row.folder_id,
+      userId: row.user_id,
+      originalName: row.original_name,
+      fileName: row.file_name,
+      blobPath: row.blob_path,
+      blobUrl: row.blob_url,
+      fileSize: row.file_size,
+      mimeType: row.mime_type,
+      fileType: row.file_type,
+      width: row.width,
+      height: row.height,
+      durationSeconds: row.duration_seconds,
+      thumbnailUrl: row.thumbnail_url,
+      thumbnailBlobPath: row.thumbnail_blob_path,
+      hasThumbnail: row.has_thumbnail,
+      tags: row.tags ? JSON.parse(row.tags) : undefined,
+      altText: row.alt_text,
+      description: row.description,
+      isPublic: row.is_public,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
 }
