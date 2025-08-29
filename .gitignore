@@ -89,6 +89,10 @@ Thumbs.db
 # Azure specific
 .azure/
 
+# Azure storage directories
+__blobstorage__/
+__queuestorage__/
+
 # Docker
 Dockerfile.tmp
 .dockerignore.tmp

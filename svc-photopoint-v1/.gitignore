@@ -111,3 +111,7 @@ public
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Azure storage directories
+__blobstorage__/
+__queuestorage__/
