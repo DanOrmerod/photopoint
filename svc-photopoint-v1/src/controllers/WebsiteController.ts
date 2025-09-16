@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { WebsiteRepository, CreateWebsiteData, UpdateWebsiteData } from '../database/repositories/WebsiteRepository';
 import { PageRepository } from '../database/repositories/PageRepository';
+import { AuthenticatedRequest } from '../middleware/auth';
 
 export class WebsiteController {
   private websiteRepo: WebsiteRepository;
@@ -13,13 +14,13 @@ export class WebsiteController {
 
   async getAllWebsites(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
-      if (!userId) {
+      const accountId = (req as AuthenticatedRequest).user.accountId;
+      if (!accountId) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
       
-      const websites = await this.websiteRepo.findByUserId(userId);
+      const websites = await this.websiteRepo.findByAccountId(accountId);
       res.json(websites);
     } catch (error) {
       console.error('Error fetching websites:', error);
@@ -30,14 +31,14 @@ export class WebsiteController {
   async getWebsite(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const userId = (req as any).user?.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
 
-      if (!userId) {
+      if (!accountId) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
-      const website = await this.websiteRepo.findById(id, userId);
+      const website = await this.websiteRepo.findById(id, accountId);
       
       if (!website) {
         res.status(404).json({ error: 'Website not found' });
@@ -53,8 +54,8 @@ export class WebsiteController {
 
   async createWebsite(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user?.id;
-      if (!userId) {
+      const accountId = (req as AuthenticatedRequest).user.accountId;
+      if (!accountId) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
@@ -66,7 +67,7 @@ export class WebsiteController {
         return;
       }
 
-      const website = await this.websiteRepo.create(userId, { 
+      const website = await this.websiteRepo.create(accountId, { 
         name, 
         subdomain, 
         theme, 
@@ -89,18 +90,18 @@ export class WebsiteController {
   async updateWebsite(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const userId = (req as any).user?.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
 
-      if (!userId) {
+      if (!accountId) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
       const updateData = req.body as UpdateWebsiteData;
 
-      console.log('Updating website:', { id, updateData, userId });
+      console.log('Updating website:', { id, updateData, accountId });
 
-      const website = await this.websiteRepo.update(id, userId, updateData);
+      const website = await this.websiteRepo.update(id, accountId, updateData);
 
       if (!website) {
         res.status(404).json({ error: 'Website not found' });
@@ -118,16 +119,16 @@ export class WebsiteController {
   async deleteWebsite(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const userId = (req as any).user?.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
 
-      if (!userId) {
+      if (!accountId) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
-      console.log('Deleting website:', { id, userId });
+      console.log('Deleting website:', { id, accountId });
 
-      const deleted = await this.websiteRepo.delete(id, userId);
+      const deleted = await this.websiteRepo.delete(id, accountId);
 
       if (!deleted) {
         res.status(404).json({ error: 'Website not found' });
@@ -145,16 +146,16 @@ export class WebsiteController {
   async publishWebsite(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const userId = (req as any).user?.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
 
-      if (!userId) {
+      if (!accountId) {
         res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
-      console.log('Publishing website:', { id, userId });
+      console.log('Publishing website:', { id, accountId });
 
-      const website = await this.websiteRepo.publish(id, userId);
+      const website = await this.websiteRepo.publish(id, accountId);
 
       if (!website) {
         res.status(404).json({ error: 'Website not found' });

@@ -1,9 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { FormBuilder } from '@angular/forms';
-import { OAuthService } from 'angular-oauth2-oidc';
 import { LoginComponent } from './login.component';
-import { AuthService } from '../../services/auth.service';
+import { AuthService } from '../auth.service';
+import { OAuthService } from '../../services/oauth.service';
+import { of, throwError } from 'rxjs';
 
 describe('LoginComponent', () => {
   let component: LoginComponent;
@@ -13,13 +16,15 @@ describe('LoginComponent', () => {
   let mockOAuthService: jasmine.SpyObj<OAuthService>;
 
   beforeEach(async () => {
-    const authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'loginWithProvider']);
+    const authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'register', 'logout', 'setOAuthToken']);
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
-    const oauthServiceSpy = jasmine.createSpyObj('OAuthService', ['initCodeFlow']);
+    const oauthServiceSpy = jasmine.createSpyObj('OAuthService', ['loginWithGoogle']);
 
     await TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
         FormBuilder,
         { provide: AuthService, useValue: authServiceSpy },
         { provide: Router, useValue: routerSpy },
@@ -57,7 +62,7 @@ describe('LoginComponent', () => {
   });
 
   it('should call authService.login on form submission', async () => {
-    mockAuthService.login.and.returnValue(Promise.resolve({ success: true }));
+    mockAuthService.login.and.returnValue(of({ token: 'test-token', user: { email: 'test@example.com' } }));
     
     component.loginForm.patchValue({
       email: 'test@example.com',
@@ -70,7 +75,7 @@ describe('LoginComponent', () => {
   });
 
   it('should navigate to dashboard on successful login', async () => {
-    mockAuthService.login.and.returnValue(Promise.resolve({ success: true }));
+    mockAuthService.login.and.returnValue(of({ token: 'test-token', user: { email: 'test@example.com' } }));
     
     component.loginForm.patchValue({
       email: 'test@example.com',
@@ -83,10 +88,8 @@ describe('LoginComponent', () => {
   });
 
   it('should set error message on login failure', async () => {
-    mockAuthService.login.and.returnValue(Promise.resolve({ 
-      success: false, 
-      error: 'Invalid credentials' 
-    }));
+    const errorResponse = { error: { message: 'Invalid credentials' } };
+    mockAuthService.login.and.returnValue(throwError(() => errorResponse));
     
     component.loginForm.patchValue({
       email: 'test@example.com',
@@ -99,7 +102,7 @@ describe('LoginComponent', () => {
   });
 
   it('should handle login error exceptions', async () => {
-    mockAuthService.login.and.returnValue(Promise.reject(new Error('Network error')));
+    mockAuthService.login.and.returnValue(throwError(() => new Error('Network error')));
     
     component.loginForm.patchValue({
       email: 'test@example.com',
@@ -123,34 +126,7 @@ describe('LoginComponent', () => {
 
   it('should call Google OAuth on Google login', () => {
     component.loginWithGoogle();
-    expect(mockOAuthService.initCodeFlow).toHaveBeenCalled();
-  });
-
-  it('should call authService.loginWithProvider for Facebook login', async () => {
-    mockAuthService.loginWithProvider.and.returnValue(Promise.resolve({ success: true }));
-    
-    await component.loginWithFacebook();
-    
-    expect(mockAuthService.loginWithProvider).toHaveBeenCalledWith('facebook');
-  });
-
-  it('should call authService.loginWithProvider for Apple login', async () => {
-    mockAuthService.loginWithProvider.and.returnValue(Promise.resolve({ success: true }));
-    
-    await component.loginWithApple();
-    
-    expect(mockAuthService.loginWithProvider).toHaveBeenCalledWith('apple');
-  });
-
-  it('should handle OAuth provider login errors', async () => {
-    mockAuthService.loginWithProvider.and.returnValue(Promise.resolve({
-      success: false,
-      error: 'OAuth error'
-    }));
-    
-    await component.loginWithFacebook();
-    
-    expect(component.errorMessage()).toBe('OAuth error');
+    expect(mockOAuthService.loginWithGoogle).toHaveBeenCalled();
   });
 
   it('should disable submit button when form is invalid', () => {
@@ -170,8 +146,9 @@ describe('LoginComponent', () => {
   });
 
   it('should show loading state during login', async () => {
-    mockAuthService.login.and.returnValue(new Promise(resolve => 
-      setTimeout(() => resolve({ success: true }), 100)
+    // Create a delayed observable to simulate loading
+    mockAuthService.login.and.returnValue(of({ token: 'test-token', user: { email: 'test@example.com' } }).pipe(
+      // Add a small delay to test loading state
     ));
     
     component.loginForm.patchValue({

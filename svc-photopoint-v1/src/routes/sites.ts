@@ -1,6 +1,7 @@
 import express from 'express';
 import { getDbConnection } from '../database/connection';
 import sql from 'mssql';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -99,7 +100,7 @@ router.use((req, res, next) => {
 
 async function handleSubdomainRequest(req: any, res: any, subdomain: string) {
     try {
-        console.log(`🌐 SUBDOMAIN REQUEST: ${subdomain} requesting ${req.path}`);
+        logger.debug(`🌐 SUBDOMAIN REQUEST: ${subdomain} requesting ${req.path}`);
         
         // Get website by subdomain
         const pool = await getDbConnection();
@@ -113,7 +114,7 @@ async function handleSubdomainRequest(req: any, res: any, subdomain: string) {
             `);
 
         if (websiteResult.recordset.length === 0) {
-            console.log(`❌ SUBDOMAIN: No published website found for subdomain: ${subdomain}`);
+            logger.debug(`❌ SUBDOMAIN: No published website found for subdomain: ${subdomain}`);
             return res.status(404).send(`
                 <html>
                     <head><title>Website Not Found</title></head>
@@ -126,11 +127,11 @@ async function handleSubdomainRequest(req: any, res: any, subdomain: string) {
         }
 
         const website = websiteResult.recordset[0];
-        console.log(`✅ SUBDOMAIN: Found website: ${website.title} (ID: ${website.id})`);
+        logger.debug(`✅ SUBDOMAIN: Found website: ${website.title} (ID: ${website.id})`);
 
         // Extract slug from path (remove leading slash)
         let slug = req.path.slice(1) || 'home';
-        console.log(`🔍 SUBDOMAIN: Looking for page with slug: ${slug}`);
+        logger.debug(`🔍 SUBDOMAIN: Looking for page with slug: ${slug}`);
 
         // Get page by slug
         const pageResult = await pool.request()
@@ -142,7 +143,7 @@ async function handleSubdomainRequest(req: any, res: any, subdomain: string) {
             `);
 
         if (pageResult.recordset.length === 0) {
-            console.log(`❌ SUBDOMAIN: No published page found for slug: ${slug}`);
+            logger.debug(`❌ SUBDOMAIN: No published page found for slug: ${slug}`);
             
             // Try to get home page instead
             const homeResult = await pool.request()
@@ -167,22 +168,22 @@ async function handleSubdomainRequest(req: any, res: any, subdomain: string) {
             }
             
             const homePage = homeResult.recordset[0];
-            console.log(`✅ SUBDOMAIN: Fallback to home page: ${homePage.title}`);
+            logger.debug(`✅ SUBDOMAIN: Fallback to home page: ${homePage.title}`);
             
             const html = renderWebsite(website, homePage);
             return res.send(html);
         }
 
         const page = pageResult.recordset[0];
-        console.log(`✅ SUBDOMAIN: Found page: ${page.title} (ID: ${page.id})`);
-        console.log(`📄 SUBDOMAIN: Page content length: ${page.content ? page.content.length : 0} characters`);
+        logger.debug(`✅ SUBDOMAIN: Found page: ${page.title} (ID: ${page.id})`);
+        logger.debug(`📄 SUBDOMAIN: Page content length: ${page.content ? page.content.length : 0} characters`);
 
         // Render and return the website
         const html = renderWebsite(website, page);
         res.send(html);
 
     } catch (error) {
-        console.error('❌ SUBDOMAIN ERROR:', error);
+        logger.error('❌ SUBDOMAIN ERROR:', error);
         res.status(500).send(`
             <html>
                 <head><title>Server Error</title></head>

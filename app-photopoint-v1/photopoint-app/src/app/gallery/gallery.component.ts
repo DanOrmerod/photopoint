@@ -3,8 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { MediaFile, MediaFolder, getSecureThumbnailUrl, getSecureMediaUrl } from '../models/media.model';
+import { MediaService } from '../services/media.service';
+import { NotificationService } from '../services/notification.service';
+import { ConfirmationService } from '../services/confirmation.service';
 import { ImageModalComponent } from '../components/image-modal/image-modal.component';
-import { map, switchMap, forkJoin, of } from 'rxjs';
+import { map, switchMap, forkJoin, of, firstValueFrom } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 // Remove duplicate interfaces since they're now in the shared model
 
@@ -44,8 +48,8 @@ export class GalleryComponent implements OnInit, OnDestroy {
   modalImages = signal<MediaFile[]>([]);
   modalCurrentIndex = signal(0);
 
-  // Authenticated image URLs
-  authenticatedThumbnails = signal<Map<string, string>>(new Map());
+  // Thumbnail image URLs
+  thumbnailUrls = signal<Map<string, string>>(new Map());
   
   // Computed property for available destination folders
   availableFolders = computed(() => {
@@ -53,7 +57,13 @@ export class GalleryComponent implements OnInit, OnDestroy {
     return this.folders().filter(folder => folder.id !== current);
   });
 
-  constructor(private http: HttpClient) {}
+  private notificationService = inject(NotificationService);
+  private confirmationService = inject(ConfirmationService);
+
+  constructor(
+    private mediaService: MediaService,
+    private http: HttpClient
+  ) {}
 
   ngOnInit() {
     this.loadFolders();
@@ -65,8 +75,8 @@ export class GalleryComponent implements OnInit, OnDestroy {
     this.error.set(null);
     
     try {
-      const response = await this.http.get<{success: boolean, data: MediaFolder[]}>('/api/v1/media/folders').toPromise();
-      this.folders.set(response?.data || []);
+      const folders = await firstValueFrom(this.mediaService.getFolders());
+      this.folders.set(folders || []);
     } catch (error) {
       console.error('Failed to load folders:', error);
       this.error.set('Failed to load media folders');
@@ -80,37 +90,49 @@ export class GalleryComponent implements OnInit, OnDestroy {
     if (!name) return;
 
     try {
-      const response = await this.http.post<{success: boolean, data: MediaFolder}>('/api/v1/media/folders', { 
-        name
-      }).toPromise();
+      const newFolder = await firstValueFrom(this.mediaService.createFolder(name));
       
-      if (response?.data) {
-        this.folders.update(folders => [...folders, response.data]);
+      if (newFolder) {
+        this.folders.update(folders => [...folders, newFolder]);
         this.newFolderName.set('');
         this.showCreateFolderModal.set(false);
+        this.notificationService.success(`Folder "${name}" created successfully`, undefined, 3000);
       }
     } catch (error) {
       console.error('Failed to create folder:', error);
-      this.error.set('Failed to create folder');
+      this.notificationService.error('Failed to create folder. Please try again.');
     }
   }
 
   async deleteFolder(folderId: string) {
-    if (!confirm('Are you sure you want to delete this folder and all its contents?')) {
+    const folder = this.folders().find(f => f.id === folderId);
+    const folderName = folder ? folder.name : 'this folder';
+    
+    const confirmed = await this.confirmationService.confirm({
+      title: 'Delete Folder',
+      message: `Are you sure you want to delete "${folderName}" and all its contents? This action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+
+    if (!confirmed) {
       return;
     }
 
     try {
-      await this.http.delete(`/api/v1/media/folders/${folderId}`).toPromise();
+      await firstValueFrom(this.mediaService.deleteFolder(folderId));
       this.folders.update(folders => folders.filter(f => f.id !== folderId));
       
       if (this.selectedFolderId() === folderId) {
         this.selectedFolderId.set(null);
         this.files.set([]);
       }
+      
+      this.notificationService.success(`Folder "${folderName}" deleted successfully`, undefined, 3000);
     } catch (error) {
       console.error('Failed to delete folder:', error);
-      this.error.set('Failed to delete folder');
+      this.notificationService.error(`Failed to delete folder "${folderName}". Please try again.`);
     }
   }
 
@@ -149,13 +171,11 @@ export class GalleryComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     
     try {
-      const url = folderId ? `/api/v1/media/files?folderId=${folderId}` : '/api/v1/media/files';
-      const response = await this.http.get<{success: boolean, data: MediaFile[]}>(url).toPromise();
-      const files = response?.data || [];
-      this.files.set(files);
+      const files = await firstValueFrom(this.mediaService.getFiles(folderId));
+      this.files.set(files || []);
       
-      // Load authenticated thumbnails for the files
-      this.loadAuthenticatedThumbnails(files);
+      // Load thumbnails for the files
+      this.loadThumbnails(files || []);
     } catch (error) {
       console.error('Failed to load files:', error);
       this.error.set('Failed to load files');
@@ -164,48 +184,61 @@ export class GalleryComponent implements OnInit, OnDestroy {
     }
   }
 
-  private loadAuthenticatedThumbnails(files: MediaFile[], clearExisting: boolean = true) {
+  private loadThumbnails(files: MediaFile[], clearExisting: boolean = true) {
     if (clearExisting) {
       // Clear existing thumbnails only when explicitly requested
-      this.authenticatedThumbnails.set(new Map());
+      // Don't revoke blob URLs here since they're managed by MediaService
+      // The MediaService handles blob URL lifecycle and caching
+      this.thumbnailUrls.set(new Map());
     }
 
     // Load new thumbnails
     files.forEach(file => {
       // Skip if thumbnail already exists (unless we're clearing)
-      if (!clearExisting && this.authenticatedThumbnails().has(file.id)) {
+      if (!clearExisting && this.thumbnailUrls().has(file.id)) {
         return;
       }
 
-      const secureUrl = getSecureThumbnailUrl(file);
-      
       // Skip files without thumbnails - don't load full images
-      if (!secureUrl) {
+      if (!file.hasThumbnail) {
         console.log(`Skipping file ${file.fileName} - no thumbnail available`);
         return;
       }
       
-      // Use the secure URL directly instead of creating blob URLs
-      this.authenticatedThumbnails.update(map => {
-        const newMap = new Map(map);
-        newMap.set(file.id, secureUrl);
-        return newMap;
+      // Use MediaService to get thumbnail
+      this.mediaService.getImageFromFile(file, 'thumbnail').subscribe({
+        next: (blobUrl) => {
+          // Store the blob URL in our map
+          this.thumbnailUrls.update((map: Map<string, string>) => {
+            const newMap = new Map(map);
+            newMap.set(file.id, blobUrl);
+            return newMap;
+          });
+        },
+        error: (error) => {
+          console.error(`Failed to load thumbnail for ${file.fileName}:`, error);
+        }
       });
     });
   }
 
-  // Get authenticated thumbnail URL for display
+  // Get thumbnail URL for display
   getThumbnailUrl(fileId: string): string {
-    return this.authenticatedThumbnails().get(fileId) || '';
+    return this.thumbnailUrls().get(fileId) || '';
   }
 
   async deleteFile(fileId: string) {
-    if (!confirm('Are you sure you want to delete this file?')) {
+    const file = this.files().find(f => f.id === fileId);
+    const fileName = file ? file.originalName : 'this file';
+    
+    const confirmed = await this.confirmationService.confirmDelete(fileName, 'file');
+
+    if (!confirmed) {
       return;
     }
 
     try {
-      await this.http.delete(`/api/v1/media/files/${fileId}`).toPromise();
+      await firstValueFrom(this.mediaService.deleteFile(fileId));
       
       // Find the file to get its folder ID before removing it
       const fileToDelete = this.files().find(f => f.id === fileId);
@@ -216,9 +249,11 @@ export class GalleryComponent implements OnInit, OnDestroy {
       if (fileToDelete?.folderId) {
         this.updateFolderCount(fileToDelete.folderId, -1);
       }
+      
+      this.notificationService.success(`File "${fileName}" deleted successfully`, undefined, 3000);
     } catch (error) {
       console.error('Failed to delete file:', error);
-      this.error.set('Failed to delete file');
+      this.notificationService.error(`Failed to delete file "${fileName}". Please try again.`);
     }
   }
 
@@ -272,26 +307,18 @@ export class GalleryComponent implements OnInit, OnDestroy {
     const folderId = this.selectedFolderId();
 
     try {
-      const formData = new FormData();
+      const result = await firstValueFrom(this.mediaService.uploadFiles(validFiles, {
+        folderId: folderId || undefined
+      }));
       
-      // Add all files to FormData
-      validFiles.forEach(file => {
-        formData.append('files', file);
-      });
-      
-      if (folderId) {
-        formData.append('folderId', folderId);
-      }
-
-      const response = await this.http.post<{success: boolean, data: MediaFile[]}>('/api/v1/media/upload', formData).toPromise();
-      if (response?.data) {
-        this.files.update(files => [...files, ...response.data]);
-        // Load authenticated thumbnails for the newly uploaded files (don't clear existing ones)
-        this.loadAuthenticatedThumbnails(response.data, false);
+      if (result?.data) {
+        this.files.update(files => [...files, ...result.data]);
+        // Load thumbnails for the newly uploaded files (don't clear existing ones)
+        this.loadThumbnails(result.data, false);
         
         // Update folder count
         if (folderId) {
-          this.updateFolderCount(folderId, response.data.length);
+          this.updateFolderCount(folderId, result.data.length);
         }
       }
     } catch (error) {
@@ -370,10 +397,10 @@ export class GalleryComponent implements OnInit, OnDestroy {
     if (!folder) return;
 
     try {
-      const response = await this.http.put<{success: boolean, data: MediaFolder}>(
-        `/api/v1/media/folders/${folder.id}/settings`, 
+      const response = await firstValueFrom(this.http.put<{success: boolean, data: MediaFolder}>(
+        `${environment.apiUrl}/media/folders/${folder.id}/settings`, 
         settings
-      ).toPromise();
+      ));
       
       if (response?.data) {
         // Update the folder in the list
@@ -454,14 +481,16 @@ export class GalleryComponent implements OnInit, OnDestroy {
     const selectedIds = Array.from(this.selectedFiles());
     if (selectedIds.length === 0) return;
 
-    if (!confirm(`Are you sure you want to delete ${selectedIds.length} file(s)?`)) {
+    const confirmed = await this.confirmationService.confirmBulkDelete(selectedIds.length, 'files');
+
+    if (!confirmed) {
       return;
     }
 
     try {
       // Delete all selected files
       const deletePromises = selectedIds.map(fileId => 
-        this.http.delete(`/api/v1/media/files/${fileId}`).toPromise()
+        firstValueFrom(this.mediaService.deleteFile(fileId))
       );
       
       await Promise.all(deletePromises);
@@ -512,18 +541,44 @@ export class GalleryComponent implements OnInit, OnDestroy {
 
     try {
       const endpoint = action === 'copy' ? 'copy' : 'move';
-      const response = await this.http.post<{success: boolean, data: MediaFile[]}>(
-        `/api/v1/media/files/${endpoint}`, 
+      const response = await firstValueFrom(this.http.post<{
+        success: boolean, 
+        data: MediaFile[], 
+        message: string,
+        skipped?: Array<{fileId: string, originalName: string, reason: string}>
+      }>(
+        `${environment.apiUrl}/media/files/${endpoint}`, 
         {
           fileIds: selectedIds,
           targetFolderId: targetFolderId
         }
-      ).toPromise();
+      ));
 
       if (response?.success) {
+        // Show detailed message including skipped files
+        let message = response.message || `Successfully ${action}ed files`;
+        
+        if (response.skipped && response.skipped.length > 0) {
+          // Create a detailed message about skipped files
+          const skippedDetails = response.skipped.map(s => `• ${s.originalName}: ${s.reason}`).join('\n');
+          
+          // Show warning notification with detailed information
+          this.notificationService.warning(
+            `${message}\n\nSkipped files:\n${skippedDetails}`,
+            `${action === 'copy' ? 'Copy' : 'Move'} completed with warnings`,
+            8000 // 8 seconds for warning messages
+          );
+          
+          console.warn('Some files were skipped:', response.skipped);
+        } else {
+          // Show success notification for fully successful operations
+          this.notificationService.success(message, undefined, 3000);
+        }
+        
         if (action === 'move') {
-          // Remove moved files from current folder
-          this.files.update(files => files.filter(file => !selectedIds.includes(file.id)));
+          // Remove moved files from current folder (only successful ones)
+          const successfulIds = response.data.map(f => f.id);
+          this.files.update(files => files.filter(file => !successfulIds.includes(file.id)));
           
           // Update current folder count
           const currentFolderId = this.selectedFolderId();
@@ -546,18 +601,22 @@ export class GalleryComponent implements OnInit, OnDestroy {
           await this.loadFiles(currentFolderId);
         }
         
+        // Refresh folder list to ensure counts are accurate
+        await this.loadFolders();
+        
         // Show success message
         const actionText = action === 'copy' ? 'copied' : 'moved';
         console.log(`Successfully ${actionText} ${selectedIds.length} files`);
       }
     } catch (error) {
       console.error(`Failed to ${action} files:`, error);
-      this.error.set(`Failed to ${action} selected files`);
+      this.notificationService.error(`Failed to ${action} selected files. Please try again.`);
     }
   }
 
   ngOnDestroy() {
-    // No blob URL cleanup needed since we're using secure URLs directly
-    this.authenticatedThumbnails.set(new Map());
+    // Don't revoke blob URLs here since they're managed by MediaService
+    // The MediaService handles blob URL lifecycle and caching properly
+    this.thumbnailUrls.set(new Map());
   }
 }

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PageRepository, CreatePageData, UpdatePageData } from '../database/repositories/PageRepository';
 import { WebsiteRepository } from '../database/repositories/WebsiteRepository';
+import { AuthenticatedRequest } from '../middleware/auth';
 
 export class PageController {
   private pageRepo: PageRepository;
@@ -14,7 +15,7 @@ export class PageController {
   async getPages(req: Request, res: Response): Promise<void> {
     try {
       const { id: websiteId } = req.params;
-      const userId = (req as any).user?.id;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       if (!userId) {
         res.status(401).json({ error: 'User not authenticated' });
@@ -43,7 +44,7 @@ export class PageController {
   async getPage(req: Request, res: Response): Promise<void> {
     try {
       const { websiteId, pageId } = req.params;
-      const userId = (req as any).user?.id;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       if (!userId) {
         res.status(401).json({ error: 'User not authenticated' });
@@ -76,7 +77,7 @@ export class PageController {
   async createPage(req: Request, res: Response): Promise<void> {
     try {
       const { id: websiteId } = req.params;
-      const userId = (req as any).user?.id;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       if (!userId) {
         res.status(401).json({ error: 'User not authenticated' });
@@ -116,7 +117,7 @@ export class PageController {
   async updatePage(req: Request, res: Response): Promise<void> {
     try {
       const { websiteId, pageId } = req.params;
-      const userId = (req as any).user?.id;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       if (!userId) {
         res.status(401).json({ error: 'User not authenticated' });
@@ -152,7 +153,7 @@ export class PageController {
   async deletePage(req: Request, res: Response): Promise<void> {
     try {
       const { websiteId, pageId } = req.params;
-      const userId = (req as any).user?.id;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       if (!userId) {
         res.status(401).json({ error: 'User not authenticated' });
@@ -186,7 +187,7 @@ export class PageController {
   async previewPage(req: Request, res: Response): Promise<void> {
     try {
       const { websiteId, pageId } = req.params;
-      const userId = (req as any).user?.id;
+      const userId = (req as AuthenticatedRequest).user.id;
 
       if (!userId) {
         res.status(401).json({ error: 'User not authenticated' });

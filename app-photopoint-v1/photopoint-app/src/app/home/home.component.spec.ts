@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { HomeComponent } from './home.component';
 import { AuthService } from '../auth/auth.service';
@@ -22,6 +24,8 @@ describe('HomeComponent', () => {
     await TestBed.configureTestingModule({
       imports: [HomeComponent],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: AuthService, useValue: authServiceSpy },
         { provide: OAuthService, useValue: oauthServiceSpy },
         { provide: WebsiteService, useValue: websiteServiceSpy },
@@ -112,7 +116,7 @@ describe('HomeComponent', () => {
 
   it('should handle edit website navigation', () => {
     component.editWebsite('test-id');
-    expect(mockRouter.navigate).toHaveBeenCalledWith(['/websites', 'test-id', 'settings']);
+    expect(mockRouter.navigate).toHaveBeenCalledWith(['/websites', 'test-id', 'edit']);
   });
 
   it('should handle open website navigation', () => {

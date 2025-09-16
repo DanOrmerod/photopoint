@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { UserRepository } from '../database/userRepository';
+import { AccountRepository } from '../database/accountRepository';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -30,7 +32,17 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 
     // Hash password and create user
     const passwordHash = await bcrypt.hash(password, 10);
-    const newUser = await UserRepository.createUser({ email, passwordHash, username });
+
+    // Create an account for the user
+    const newAccount = await AccountRepository.createAccount({ name: username });
+
+    // Create user with the associated account
+    const newUser = await UserRepository.createUser({ 
+      email, 
+      passwordHash, 
+      username, 
+      accountId: newAccount.id 
+    });
     
     // Issue JWT token for automatic login
     const token = jwt.sign(
@@ -51,7 +63,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -104,7 +116,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

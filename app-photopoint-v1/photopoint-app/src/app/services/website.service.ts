@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 
-// Import interfaces from the models
+// Use local interfaces to avoid conflicts for now - will clean up gradually
 export interface Website {
   id: string;
   name: string;
@@ -16,7 +16,7 @@ export interface Website {
   theme: string;
   pageCount?: number;
   visits?: number;
-  ownerId: string;
+  accountId: string; // Updated from ownerId
   createdAt: Date;
   updatedAt: Date;
 }
@@ -112,7 +112,7 @@ export class WebsiteService {
           theme: w.theme || 'default',
           pageCount: w.pageCount || 0,
           visits: w.visits || 0,
-          ownerId: w.userId || w.ownerId,
+          accountId: w.accountId || w.userId || w.ownerId, // Support multiple field names for backward compatibility
           createdAt: new Date(w.createdAt),
           updatedAt: new Date(w.updatedAt)
         }));
@@ -125,7 +125,8 @@ export class WebsiteService {
       const response = await firstValueFrom(this.http.get<any>(`${this.apiUrl}/websites/${id}`, { headers: this.getHeaders() }));
       
       if (response) {
-        const w = response.website || response;
+        // API now returns direct website object
+        const w = response;
         return {
           id: w.id,
           name: w.name,
@@ -137,13 +138,17 @@ export class WebsiteService {
           theme: w.theme || 'default',
           pageCount: w.pageCount || 0,
           visits: w.visits || 0,
-          ownerId: w.userId || w.ownerId,
+          accountId: w.accountId || w.userId || w.ownerId, // Support multiple field names for backward compatibility
           createdAt: new Date(w.createdAt),
           updatedAt: new Date(w.updatedAt)
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch website:', error);
+      // Handle new error format: { error: 'message' }
+      if (error.error?.error) {
+        throw new Error(error.error.error);
+      }
     }
     throw new Error('Website not found');
   }
@@ -198,7 +203,7 @@ export class WebsiteService {
           theme: w.theme || 'default',
           pageCount: w.pageCount || 0,
           visits: w.visits || 0,
-          ownerId: w.userId || w.ownerId,
+          accountId: w.accountId || w.userId || w.ownerId, // Support multiple field names for backward compatibility
           createdAt: new Date(w.createdAt),
           updatedAt: new Date(w.updatedAt)
         };
@@ -388,7 +393,7 @@ export class WebsiteService {
           theme: w.theme || 'default',
           pageCount: w.pageCount || 0,
           visits: w.visits || 0,
-          ownerId: w.userId || w.ownerId,
+          accountId: w.accountId || w.userId || w.ownerId, // Support multiple field names for backward compatibility
           createdAt: new Date(w.createdAt),
           updatedAt: new Date(w.updatedAt)
         };

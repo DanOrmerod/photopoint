@@ -4,10 +4,12 @@ import { CommonModule } from '@angular/common';
 import { AuthService } from './auth/auth.service';
 import { OAuthService } from './services/oauth.service';
 import { ThemeService } from './services/theme.service';
+import { NotificationComponent } from './components/notification.component';
+import { ConfirmationDialogComponent } from './components/confirmation-dialog.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, CommonModule],
+  imports: [RouterOutlet, RouterLink, CommonModule, NotificationComponent, ConfirmationDialogComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })

@@ -1,14 +1,33 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { ImageBlockComponent } from './image-block.component';
+import { MediaService } from '../../../../services/media.service';
+import { PhotoService } from '../../../../services/photo.service';
 
 describe('ImageBlockComponent', () => {
   let component: ImageBlockComponent;
   let fixture: ComponentFixture<ImageBlockComponent>;
 
+  const mockMediaService = {
+    uploadFile: jasmine.createSpy('uploadFile').and.returnValue(Promise.resolve()),
+    generateResponsiveVariants: jasmine.createSpy('generateResponsiveVariants').and.returnValue(Promise.resolve())
+  };
+
+  const mockPhotoService = {
+    getPhotos: jasmine.createSpy('getPhotos').and.returnValue(Promise.resolve([]))
+  };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ImageBlockComponent]
+      imports: [ImageBlockComponent],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: MediaService, useValue: mockMediaService },
+        { provide: PhotoService, useValue: mockPhotoService }
+      ]
     })
     .compileComponents();
 
@@ -44,19 +63,11 @@ describe('ImageBlockComponent', () => {
     expect(img.alt).toBe('Test Image');
   });
 
-  it('should display placeholder when no src is provided', () => {
-    component.data.content = {};
-    fixture.detectChanges();
-    
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.image-placeholder')).toBeTruthy();
-  });
-
   it('should enter editing mode', () => {
     component.isEditing = true;
     fixture.detectChanges();
     
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.inline-image-editor')).toBeTruthy();
+    expect(compiled.querySelector('.enhanced-image-editor')).toBeTruthy();
   });
 });

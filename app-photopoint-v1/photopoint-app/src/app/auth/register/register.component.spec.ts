@@ -131,7 +131,7 @@ describe('RegisterComponent', () => {
       await component.onSubmit();
       
       expect(mockAuthService.register).toHaveBeenCalledWith('test@example.com', 'password123', 'testuser');
-      expect(component.registerSuccess()).toContain('Registration successful');
+      expect(component.registerSuccess()).toContain('Welcome to PhotoPoint');
       expect(component.isLoading()).toBe(false);
     });
 

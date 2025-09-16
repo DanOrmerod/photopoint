@@ -59,7 +59,7 @@ export class PageRepository {
           IsHomePage,
           CreatedAt,
           UpdatedAt
-        FROM Pages
+        FROM Page
         WHERE WebsiteId = @websiteId
         ORDER BY SortOrder, CreatedAt
       `);
@@ -99,7 +99,7 @@ export class PageRepository {
           IsHomePage,
           CreatedAt,
           UpdatedAt
-        FROM Pages
+        FROM Page
         WHERE WebsiteId = @websiteId AND Status = 'published'
         ORDER BY SortOrder, CreatedAt
       `);
@@ -140,7 +140,7 @@ export class PageRepository {
           IsHomePage,
           CreatedAt,
           UpdatedAt
-        FROM Pages
+        FROM Page
         WHERE Id = @id AND WebsiteId = @websiteId
       `);
 
@@ -191,8 +191,8 @@ export class PageRepository {
           w.Subdomain,
           w.Theme,
           w.Settings as WebsiteSettings
-        FROM Pages p
-        INNER JOIN Websites w ON p.WebsiteId = w.Id
+        FROM Page p
+        INNER JOIN Website w ON p.WebsiteId = w.Id
         WHERE w.Subdomain = @subdomain 
           AND p.Slug = @pageSlug
           AND w.Status = 'active'
@@ -245,7 +245,7 @@ export class PageRepository {
       .input('sortOrder', sql.Int, data.sortOrder || 0)
       .input('isHomePage', sql.Bit, data.isHomePage || false)
       .query(`
-        INSERT INTO Pages (Id, WebsiteId, Title, Slug, Content, MetaTitle, MetaDescription, Status, SortOrder, IsHomePage, CreatedAt, UpdatedAt)
+        INSERT INTO Page (Id, WebsiteId, Title, Slug, Content, MetaTitle, MetaDescription, Status, SortOrder, IsHomePage, CreatedAt, UpdatedAt)
         VALUES (@id, @websiteId, @title, @slug, @content, @metaTitle, @metaDescription, @status, @sortOrder, @isHomePage, GETUTCDATE(), GETUTCDATE())
       `);
 
@@ -305,8 +305,8 @@ export class PageRepository {
     setParts.push('UpdatedAt = GETUTCDATE()');
 
     await request.query(`
-      UPDATE Pages 
-      SET ${setParts.join(', ')}
+      UPDATE Page
+      SET Title = @title, Slug = @slug, Content = @content, UpdatedAt = GETUTCDATE()
       WHERE Id = @id AND WebsiteId = @websiteId
     `);
 
@@ -320,7 +320,7 @@ export class PageRepository {
       .input('id', sql.UniqueIdentifier, id)
       .input('websiteId', sql.UniqueIdentifier, websiteId)
       .query(`
-        DELETE FROM Pages 
+        DELETE FROM Page 
         WHERE Id = @id AND WebsiteId = @websiteId
       `);
 

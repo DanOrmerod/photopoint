@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { RouterTestingModule } from '@angular/router/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 
 import { WebsiteListComponent } from './website-list.component';
 import { WebsiteService } from '../../services/website.service';
@@ -11,10 +13,14 @@ describe('WebsiteListComponent', () => {
 
   beforeEach(async () => {
     const spy = jasmine.createSpyObj('WebsiteService', ['getWebsites', 'deleteWebsite']);
+    spy.getWebsites.and.returnValue(Promise.resolve([]));
 
     await TestBed.configureTestingModule({
-      imports: [WebsiteListComponent, RouterTestingModule],
+      imports: [WebsiteListComponent],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         { provide: WebsiteService, useValue: spy }
       ]
     })
@@ -23,21 +29,41 @@ describe('WebsiteListComponent', () => {
     mockWebsiteService = TestBed.inject(WebsiteService) as jasmine.SpyObj<WebsiteService>;
     fixture = TestBed.createComponent(WebsiteListComponent);
     component = fixture.componentInstance;
+    
+    // Don't stub loadWebsites for the specific test that needs to test it
+    // spyOn(component, 'loadWebsites').and.stub();
   });
 
   it('should create', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should load websites on init', () => {
-    mockWebsiteService.getWebsites.and.returnValue(Promise.resolve([]));
-    component.ngOnInit();
+  it('should load websites on init', async () => {
+    // Reset any previous calls that might have happened during component creation
+    mockWebsiteService.getWebsites.calls.reset();
+    
+    // Set up the mock return value
+    mockWebsiteService.getWebsites.and.returnValue(Promise.resolve([
+      { id: '1', name: 'Test Website', subdomain: 'test' } as any
+    ]));
+    
+    // Call the method directly
+    await component.loadWebsites();
+    
+    // Verify the service was called
     expect(mockWebsiteService.getWebsites).toHaveBeenCalled();
+    expect(component.websites().length).toBe(1);
   });
 
-  it('should show empty state when no websites', () => {
+  it('should show empty state when no websites', async () => {
+    // Explicitly set all signal states to ensure proper conditions
     component.websites.set([]);
     component.loading.set(false);
+    component.error.set(null);
+    
+    // Force multiple change detection cycles
+    fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
     
     const compiled = fixture.nativeElement as HTMLElement;

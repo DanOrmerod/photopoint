@@ -58,7 +58,7 @@ export class HomeComponent implements OnInit {
         theme: w.theme,
         pageCount: w.pageCount || 0,
         visits: w.visits || 0,
-        ownerId: w.ownerId,
+        accountId: w.accountId,
         createdAt: w.createdAt,
         updatedAt: w.updatedAt
       }));

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { of } from 'rxjs';
 
 import { WebsiteCreateComponent } from './website-create.component';
@@ -15,16 +15,22 @@ describe('WebsiteCreateComponent', () => {
   let mockRouter: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
-    const websiteServiceSpy = jasmine.createSpyObj('WebsiteService', ['createWebsite', 'checkSubdomainAvailability']);
-    const templateServiceSpy = jasmine.createSpyObj('TemplateService', ['getTemplates']);
+    const websiteServiceSpy = jasmine.createSpyObj('WebsiteService', ['createWebsite']);
+    const templateServiceSpy = jasmine.createSpyObj('TemplateService', ['getTemplates', 'applyTemplate']);
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    const activatedRouteMock = {
+      snapshot: { params: {} },
+      params: of({}),
+      queryParams: of({})
+    };
 
     await TestBed.configureTestingModule({
       imports: [WebsiteCreateComponent, ReactiveFormsModule],
       providers: [
         { provide: WebsiteService, useValue: websiteServiceSpy },
         { provide: TemplateService, useValue: templateServiceSpy },
-        { provide: Router, useValue: routerSpy }
+        { provide: Router, useValue: routerSpy },
+        { provide: ActivatedRoute, useValue: activatedRouteMock }
       ]
     }).compileComponents();
 
@@ -35,8 +41,8 @@ describe('WebsiteCreateComponent', () => {
     mockRouter = TestBed.inject(Router) as jasmine.SpyObj<Router>;
 
     // Setup default mock returns
-    mockTemplateService.getTemplates.and.returnValue(of([]));
-    mockWebsiteService.checkSubdomainAvailability.and.returnValue(of(true));
+    mockTemplateService.getTemplates.and.returnValue([]);
+    mockTemplateService.applyTemplate.and.returnValue(Promise.resolve());
   });
 
   it('should create', () => {
@@ -97,9 +103,25 @@ describe('WebsiteCreateComponent', () => {
       id: '1',
       name: 'Test Template',
       description: 'Test Description',
-      category: 'business',
-      preview: 'preview-content',
-      isActive: true
+      category: 'business' as const,
+      thumbnail: '/test-thumb.jpg',
+      theme: {
+        id: 'test-theme',
+        name: 'Test Theme',
+        description: 'Test theme',
+        category: 'business' as const,
+        preview: { primaryColor: '#000', secondaryColor: '#666', backgroundColor: '#fff', textColor: '#000', accentColor: '#007bff' },
+        styles: {} as any,
+        cssVariables: {} as any
+      },
+      pages: [],
+      features: ['test feature'],
+      pricing: 'free' as const,
+      difficulty: 'beginner' as const,
+      estimatedSetupTime: '30 minutes',
+      targetAudience: ['test audience'],
+      includesContent: true,
+      tags: ['test']
     };
 
     component.onTemplateSelected(mockTemplate);
@@ -128,25 +150,66 @@ describe('WebsiteCreateComponent', () => {
     expect(component.websiteForm.valid).toBeTruthy();
   });
 
-  it('should create website on valid form submission', () => {
-    mockWebsiteService.createWebsite.and.returnValue(of({
+  it('should create website on valid form submission', async () => {
+    mockWebsiteService.createWebsite.and.returnValue(Promise.resolve({
       id: '1',
       name: 'Test Website',
       subdomain: 'test-site',
       description: '',
-      customDomain: null,
-      templateId: null,
-      isActive: true,
+      customDomain: '',
+      favicon: '',
+      status: 'draft' as const,
+      theme: 'default',
+      pageCount: 0,
+      visits: 0,
+      accountId: 'user1',
       createdAt: new Date(),
       updatedAt: new Date()
     }));
+
+    // Set up a template selection with minimum required properties
+    const mockTemplate = {
+      id: 'template1',
+      name: 'Test Template',
+      description: 'A test template',
+      category: 'business' as const,
+      thumbnail: 'test-thumb.jpg',
+      theme: {
+        id: 'default',
+        name: 'Default Theme',
+        description: 'Default theme',
+        category: 'business' as const,
+        preview: {
+          primaryColor: '#000',
+          secondaryColor: '#fff',
+          backgroundColor: '#fff',
+          textColor: '#000',
+          accentColor: '#ff0000'
+        },
+        styles: {
+          typography: {
+            fontFamily: 'Arial',
+            fontSize: '16px',
+            lineHeight: '1.5'
+          }
+        }
+      },
+      pages: [],
+      features: [],
+      pricing: 'free' as const,
+      difficulty: 'beginner' as const,
+      estimatedSetupTime: '5 minutes',
+      tags: [],
+      isPopular: false
+    } as any;
+    component.selectedTemplate.set(mockTemplate);
 
     component.websiteForm.patchValue({
       name: 'Test Website',
       subdomain: 'test-site'
     });
 
-    component.onSubmit();
+    await component.onSubmit();
 
     expect(mockWebsiteService.createWebsite).toHaveBeenCalled();
   });

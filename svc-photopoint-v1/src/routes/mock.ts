@@ -1,5 +1,6 @@
 import express from 'express';
 import { Request, Response } from 'express';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -37,7 +38,7 @@ const mockWebsites = [
 
 // GET /api/mock/websites - Get all mock websites
 router.get('/websites', (req: Request, res: Response) => {
-  console.log('📋 Serving mock websites data');
+  logger.debug('📋 Serving mock websites data');
   res.json({ websites: mockWebsites });
 });
 
@@ -51,7 +52,7 @@ router.get('/websites/:id', (req: Request, res: Response): void => {
     return;
   }
   
-  console.log(`📋 Serving mock website: ${website.name}`);
+  logger.debug(`📋 Serving mock website: ${website.name}`);
   res.json({ website });
 });
 
@@ -81,7 +82,7 @@ router.post('/websites', (req: Request, res: Response): void => {
   
   mockWebsites.push(newWebsite);
   
-  console.log(`✅ Created mock website: ${name}`);
+  logger.info(`✅ Created mock website: ${name}`);
   res.status(201).json({ website: newWebsite, message: 'Website created successfully' });
 });
 
@@ -102,7 +103,7 @@ router.put('/websites/:id', (req: Request, res: Response): void => {
     updatedAt: new Date().toISOString()
   };
   
-  console.log(`✅ Updated mock website: ${mockWebsites[websiteIndex].name}`);
+  logger.info(`✅ Updated mock website: ${mockWebsites[websiteIndex].name}`);
   res.json({ message: 'Website updated successfully' });
 });
 
@@ -118,7 +119,7 @@ router.delete('/websites/:id', (req: Request, res: Response): void => {
   
   const deletedWebsite = mockWebsites.splice(websiteIndex, 1)[0];
   
-  console.log(`🗑️ Deleted mock website: ${deletedWebsite.name}`);
+  logger.info(`🗑️ Deleted mock website: ${deletedWebsite.name}`);
   res.json({ message: 'Website deleted successfully' });
 });
 

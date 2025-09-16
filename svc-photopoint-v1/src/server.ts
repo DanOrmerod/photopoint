@@ -9,6 +9,7 @@ import path from 'path';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import { initializeDatabase } from './database/connection';
+import { logger } from './utils/logger';
 // Import routes
 import authRoutes from './routes/auth';
 import oauthRoutes from './routes/oauth';
@@ -16,6 +17,7 @@ import photoRoutes from './routes/photos';
 import websiteRoutes from './routes/websites';
 import mediaRoutes from './routes/media';
 import mockRoutes from './routes/mock';
+import systemRoutes from './routes/system';
 // import sitesRoutes from './routes/sites';
 
 // Import services
@@ -76,6 +78,7 @@ app.use('/api/v1/photos', photoRoutes);
 app.use('/api/v1/websites', websiteRoutes);
 app.use('/api/v1/media', mediaRoutes);
 app.use('/api/v1/mock', mockRoutes);
+app.use('/api/v1/system', systemRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
@@ -109,7 +112,7 @@ app.get('/', (req: Request, res: Response) => {
 
 // Error handling middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err.message);
+  logger.error('Error:', err.message);
   res.status(500).json({
     error: 'Internal Server Error',
     message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
@@ -128,7 +131,7 @@ app.use('*', (req: Request, res: Response) => {
 async function startServer() {
   try {
     // Test database connection without initialization
-    console.log('Testing database connection...');
+    logger.info('Testing database connection...');
     const testConnection = new (await import('mssql')).ConnectionPool({
       server: process.env.DB_SERVER!,
       database: process.env.DB_DATABASE!,
@@ -144,51 +147,53 @@ async function startServer() {
     await testConnection.connect();
     const result = await testConnection.request().query('SELECT 1 as test');
     await testConnection.close();
-    console.log('✅ Database connection test successful');
+    logger.info('✅ Database connection test successful');
     
     // Now initialize database properly
     await initializeDatabase();
-    console.log('✅ Database initialized successfully');
+    logger.info('✅ Database initialized successfully');
     
     // Initialize blob storage
     await blobStorageService.initialize();
-    console.log('✅ Blob storage initialized successfully');
+    logger.info('✅ Blob storage initialized successfully');
     
     // Start the server
     app.listen(PORT, () => {
-      console.log(`🚀 PhotoPoint API server running on port ${PORT}`);
-      console.log(`📍 Health check available at: http://localhost:${PORT}/health`);
-      console.log(`🔗 API endpoint available at: http://localhost:${PORT}/api/v1`);
-      console.log(`📁 Media API available at: http://localhost:${PORT}/api/v1/media`);
-      console.log(`🌐 Website serving enabled for *.localhost:${PORT} subdomains`);
-      console.log(`🗄️ Database: Connected to SQL Server`);
-      console.log(`💾 Blob Storage: Connected to Azurite (${process.env.AZURE_STORAGE_CONNECTION_STRING ? 'Custom' : 'Default'})`);
+      logger.info(`🚀 PhotoPoint API server running on port ${PORT}`);
+      logger.info(`📍 Health check available at: http://localhost:${PORT}/health`);
+      logger.info(`🔗 API endpoint available at: http://localhost:${PORT}/api/v1`);
+      logger.info(`📁 Media API available at: http://localhost:${PORT}/api/v1/media`);
+      logger.info(`🌐 Website serving enabled for *.localhost:${PORT} subdomains`);
+      logger.info(`🗄️ Database: Connected to SQL Server`);
+      logger.info(`💾 Blob Storage: Connected to Azurite (${process.env.AZURE_STORAGE_CONNECTION_STRING ? 'Custom' : 'Default'})`);
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    console.log('⚠️ Falling back to mock data endpoints only');
+    logger.error('❌ Failed to start server:', error);
+    logger.warn('⚠️ Falling back to mock data endpoints only');
     
     try {
       // Still try to initialize blob storage
       await blobStorageService.initialize();
-      console.log('✅ Blob storage initialized successfully');
+      logger.info('✅ Blob storage initialized successfully');
     } catch (blobError) {
-      console.error('❌ Failed to initialize blob storage:', blobError);
+      logger.error('❌ Failed to initialize blob storage:', blobError);
     }
     
     // Start server without database
     app.listen(PORT, () => {
-      console.log(`🚀 PhotoPoint API server running on port ${PORT} (Mock Mode)`);
-      console.log(`📍 Health check available at: http://localhost:${PORT}/health`);
-      console.log(`🔗 Mock API endpoints available at: http://localhost:${PORT}/api/v1/mock`);
-      console.log(`📁 Media API available at: http://localhost:${PORT}/api/v1/media`);
-      console.log(`⚠️ Database unavailable - using mock data only`);
-      console.log(`💾 Blob Storage: ${process.env.AZURE_STORAGE_CONNECTION_STRING ? 'Connected to Azurite' : 'Using default Azurite connection'}`);
+      logger.info(`🚀 PhotoPoint API server running on port ${PORT} (Mock Mode)`);
+      logger.info(`📍 Health check available at: http://localhost:${PORT}/health`);
+      logger.info(`🔗 Mock API endpoints available at: http://localhost:${PORT}/api/v1/mock`);
+      logger.info(`📁 Media API available at: http://localhost:${PORT}/api/v1/media`);
+      logger.warn(`⚠️ Database unavailable - using mock data only`);
+      logger.info(`💾 Blob Storage: ${process.env.AZURE_STORAGE_CONNECTION_STRING ? 'Connected to Azurite' : 'Using default Azurite connection'}`);
     });
   }
 }
 
 // Start the application
 startServer();
+
+logger.info(`Environment Check: Application starting with log level: ${process.env.LOG_LEVEL}`);
 
 export default app;

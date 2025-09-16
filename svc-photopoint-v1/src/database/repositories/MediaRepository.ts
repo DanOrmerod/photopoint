@@ -1,11 +1,13 @@
 import { Request } from 'mssql';
 import { getDbConnection } from '../connection';
+import { BlobPathUtils } from '../../utils/blobPathUtils';
+import { logger } from '../../utils/logger';
 
 export interface MediaFolder {
   id: string;
   name: string;
   parentId?: string;
-  userId: string;
+  accountId: string;
   allowWebsiteUsage: boolean;
   websiteUsagePermissions: 'private' | 'all_websites' | 'specific_websites';
   description?: string;
@@ -22,28 +24,22 @@ export interface MediaFolderWebsitePermission {
   permissionType: 'read' | 'read_write';
   grantedBy: string;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface MediaFile {
   id: string;
   folderId?: string;
-  userId: string;
+  accountId: string;
   originalName: string;
   fileName: string;
-  blobPath: string;
   blobUrl: string;
   fileSize: number;
   mimeType: string;
   fileType: 'image' | 'video';
-  width?: number;
-  height?: number;
-  durationSeconds?: number;
-  thumbnailUrl?: string;
-  thumbnailBlobPath?: string;
   hasThumbnail?: boolean;
   tags?: string[];
   altText?: string;
-  description?: string;
   isPublic: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -53,7 +49,7 @@ export class MediaRepository {
   // Folder operations
   async createFolder(
     name: string, 
-    userId: string, 
+    accountId: string, 
     parentId?: string,
     settings?: {
       allowWebsiteUsage?: boolean;
@@ -67,97 +63,104 @@ export class MediaRepository {
     
     const result = await request
       .input('name', name)
-      .input('userId', userId)
+      .input('accountId', accountId)
       .input('parentId', parentId || null)
       .input('allowWebsiteUsage', settings?.allowWebsiteUsage || false)
       .input('websiteUsagePermissions', settings?.websiteUsagePermissions || 'private')
       .input('description', settings?.description || null)
       .input('tags', settings?.tags ? JSON.stringify(settings.tags) : null)
       .query(`
-        INSERT INTO media_folders (name, user_id, parent_id, allow_website_usage, website_usage_permissions, description, tags)
-        OUTPUT inserted.id, inserted.name, inserted.parent_id, inserted.user_id, 
-               inserted.allow_website_usage, inserted.website_usage_permissions, 
-               inserted.description, inserted.tags, inserted.created_at, inserted.updated_at
-        VALUES (@name, @userId, @parentId, @allowWebsiteUsage, @websiteUsagePermissions, @description, @tags)
+        INSERT INTO MediaFolder (Name, AccountId, ParentId, AllowWebsiteUsage, WebsiteUsagePermissions, Description, Tags, CreatedAt, UpdatedAt)
+        OUTPUT inserted.Id, inserted.Name, inserted.ParentId, inserted.AccountId, 
+               inserted.AllowWebsiteUsage, inserted.WebsiteUsagePermissions, 
+               inserted.Description, inserted.Tags, inserted.CreatedAt, inserted.UpdatedAt
+        VALUES (@name, @accountId, @parentId, @allowWebsiteUsage, @websiteUsagePermissions, @description, @tags, GETUTCDATE(), GETUTCDATE())
       `);
 
     const folder = result.recordset[0];
     return {
       id: folder.id,
       name: folder.name,
-      parentId: folder.parent_id,
-      userId: folder.user_id,
-      allowWebsiteUsage: folder.allow_website_usage,
-      websiteUsagePermissions: folder.website_usage_permissions,
-      description: folder.description,
-      tags: folder.tags ? JSON.parse(folder.tags) : undefined,
-      createdAt: folder.created_at,
-      updatedAt: folder.updated_at,
+      parentId: folder.ParentId,
+      accountId: folder.AccountId,
+      allowWebsiteUsage: folder.AllowWebsiteUsage,
+      websiteUsagePermissions: folder.WebsiteUsagePermissions,
+      description: folder.Description,
+      tags: folder.Tags ? JSON.parse(folder.Tags) : undefined,
+      createdAt: folder.CreatedAt,
+      updatedAt: folder.UpdatedAt,
       fileCount: 0
     };
   }
 
-  async getFolders(userId: string, parentId?: string): Promise<MediaFolder[]> {
+  async getFolders(accountId: string, parentId?: string, websiteId?: string): Promise<MediaFolder[]> {
     const pool = await getDbConnection();
     const request = new Request(pool);
-    
+
     const result = await request
-      .input('userId', userId)
+      .input('accountId', accountId)
       .input('parentId', parentId || null)
+      .input('websiteId', websiteId || null)
       .query(`
         SELECT 
-          f.id,
-          f.name,
-          f.parent_id,
-          f.user_id,
-          f.allow_website_usage,
-          f.website_usage_permissions,
-          f.description,
-          f.tags,
-          f.created_at,
-          f.updated_at,
-          COUNT(mf.id) as file_count
-        FROM media_folders f
-        LEFT JOIN media_files mf ON f.id = mf.folder_id AND mf.is_deleted = 0
-        WHERE f.user_id = @userId 
-          AND f.is_deleted = 0
-          AND ((@parentId IS NULL AND f.parent_id IS NULL) OR f.parent_id = @parentId)
-        GROUP BY f.id, f.name, f.parent_id, f.user_id, f.allow_website_usage, f.website_usage_permissions, f.description, f.tags, f.created_at, f.updated_at
-        ORDER BY f.name
+          f.Id,
+          f.Name,
+          f.ParentId,
+          f.AccountId,
+          f.AllowWebsiteUsage,
+          f.WebsiteUsagePermissions,
+          f.Description,
+          f.Tags,
+          f.CreatedAt,
+          f.UpdatedAt,
+          COUNT(mf.Id) as file_count
+        FROM MediaFolder f
+        LEFT JOIN MediaFile mf ON f.Id = mf.FolderId AND mf.IsDeleted = 0
+        LEFT JOIN MediaFolderWebsitePermission p ON f.Id = p.FolderId
+        WHERE f.AccountId = @accountId 
+          AND f.IsDeleted = 0
+          AND ((@parentId IS NULL AND f.ParentId IS NULL) OR f.ParentId = @parentId)
+          AND (
+            f.WebsiteUsagePermissions = 'all_websites' OR
+            (f.WebsiteUsagePermissions = 'specific_websites' AND p.WebsiteId = @websiteId) OR
+            (f.WebsiteUsagePermissions = 'private' AND @websiteId IS NULL)
+          )
+        GROUP BY f.Id, f.Name, f.ParentId, f.AccountId, f.AllowWebsiteUsage, f.WebsiteUsagePermissions, f.Description, f.Tags, f.CreatedAt, f.UpdatedAt
+        ORDER BY f.Name
       `);
 
     return result.recordset.map(row => ({
-      id: row.id,
-      name: row.name,
-      parentId: row.parent_id,
-      userId: row.user_id,
-      allowWebsiteUsage: row.allow_website_usage,
-      websiteUsagePermissions: row.website_usage_permissions,
-      description: row.description,
-      tags: row.tags ? JSON.parse(row.tags) : undefined,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      id: row.Id,
+      name: row.Name,
+      parentId: row.ParentId,
+      accountId: row.AccountId,
+      allowWebsiteUsage: row.AllowWebsiteUsage,
+      websiteUsagePermissions: row.WebsiteUsagePermissions,
+      description: row.Description,
+      tags: row.Tags ? JSON.parse(row.Tags) : undefined,
+      createdAt: row.CreatedAt,
+      updatedAt: row.UpdatedAt,
       fileCount: row.file_count
     }));
   }
 
-  async deleteFolder(folderId: string, userId: string): Promise<void> {
+  async deleteFolder(folderId: string, accountId: string): Promise<void> {
     const pool = await getDbConnection();
     const request = new Request(pool);
     
     await request
       .input('folderId', folderId)
-      .input('userId', userId)
+      .input('accountId', accountId)
       .query(`
         BEGIN TRANSACTION;
         
-        UPDATE media_files 
-        SET folder_id = NULL, updated_at = GETUTCDATE()
-        WHERE folder_id = @folderId AND user_id = @userId;
+        UPDATE MediaFile 
+        SET FolderId = NULL, UpdatedAt = GETUTCDATE()
+        WHERE FolderId = @folderId AND AccountId = @accountId;
         
-        UPDATE media_folders 
-        SET is_deleted = 1, updated_at = GETUTCDATE()
-        WHERE id = @folderId AND user_id = @userId;
+        UPDATE MediaFolder 
+        SET IsDeleted = 1, UpdatedAt = GETUTCDATE()
+        WHERE Id = @folderId AND AccountId = @accountId;
         
         COMMIT TRANSACTION;
       `);
@@ -165,7 +168,7 @@ export class MediaRepository {
 
   async updateFolderSettings(
     folderId: string,
-    userId: string,
+    accountId: string,
     settings: {
       allowWebsiteUsage?: boolean;
       websiteUsagePermissions?: 'private' | 'all_websites' | 'specific_websites';
@@ -178,25 +181,25 @@ export class MediaRepository {
     
     const result = await request
       .input('folderId', folderId)
-      .input('userId', userId)
+      .input('accountId', accountId)
       .input('allowWebsiteUsage', settings.allowWebsiteUsage)
       .input('websiteUsagePermissions', settings.websiteUsagePermissions)
       .input('description', settings.description || null)
       .input('tags', settings.tags ? JSON.stringify(settings.tags) : null)
       .query(`
-        UPDATE media_folders 
+        UPDATE MediaFolder 
         SET 
-          allow_website_usage = COALESCE(@allowWebsiteUsage, allow_website_usage),
-          website_usage_permissions = COALESCE(@websiteUsagePermissions, website_usage_permissions),
-          description = COALESCE(@description, description),
-          tags = COALESCE(@tags, tags),
-          updated_at = GETUTCDATE()
-        WHERE id = @folderId AND user_id = @userId;
+          AllowWebsiteUsage = COALESCE(@allowWebsiteUsage, AllowWebsiteUsage),
+          WebsiteUsagePermissions = COALESCE(@websiteUsagePermissions, WebsiteUsagePermissions),
+          Description = COALESCE(@description, Description),
+          Tags = COALESCE(@tags, Tags),
+          UpdatedAt = GETUTCDATE()
+        WHERE Id = @folderId AND AccountId = @accountId;
         
-        SELECT id, name, parent_id, user_id, allow_website_usage, website_usage_permissions,
-               description, tags, created_at, updated_at
-        FROM media_folders 
-        WHERE id = @folderId AND user_id = @userId;
+        SELECT Id, Name, ParentId, AccountId, AllowWebsiteUsage, WebsiteUsagePermissions,
+               Description, Tags, CreatedAt, UpdatedAt
+        FROM MediaFolder 
+        WHERE Id = @folderId AND AccountId = @accountId;
       `);
 
     if (result.recordset.length === 0) {
@@ -205,16 +208,16 @@ export class MediaRepository {
 
     const folder = result.recordset[0];
     return {
-      id: folder.id,
-      name: folder.name,
-      parentId: folder.parent_id,
-      userId: folder.user_id,
-      allowWebsiteUsage: folder.allow_website_usage,
-      websiteUsagePermissions: folder.website_usage_permissions,
-      description: folder.description,
-      tags: folder.tags ? JSON.parse(folder.tags) : undefined,
-      createdAt: folder.created_at,
-      updatedAt: folder.updated_at,
+      id: folder.Id,
+      name: folder.Name,
+      parentId: folder.ParentId,
+      accountId: folder.AccountId,
+      allowWebsiteUsage: folder.AllowWebsiteUsage,
+      websiteUsagePermissions: folder.WebsiteUsagePermissions,
+      description: folder.Description,
+      tags: folder.Tags ? JSON.parse(folder.Tags) : undefined,
+      createdAt: folder.CreatedAt,
+      updatedAt: folder.UpdatedAt,
       fileCount: 0 // Will be populated separately if needed
     };
   }
@@ -234,26 +237,27 @@ export class MediaRepository {
       .input('permissionType', permissionType)
       .input('grantedBy', grantedBy)
       .query(`
-        MERGE media_folder_website_permissions AS target
-        USING (SELECT @folderId as folder_id, @websiteId as website_id) AS source
-        ON target.folder_id = source.folder_id AND target.website_id = source.website_id
+        MERGE MediaFolderWebsitePermission AS target
+        USING (SELECT @folderId as FolderId, @websiteId as WebsiteId) AS source
+        ON target.FolderId = source.FolderId AND target.WebsiteId = source.WebsiteId
         WHEN MATCHED THEN
-          UPDATE SET permission_type = @permissionType, granted_by = @grantedBy
+          UPDATE SET PermissionType = @permissionType, GrantedBy = @grantedBy, UpdatedAt = GETUTCDATE()
         WHEN NOT MATCHED THEN
-          INSERT (folder_id, website_id, permission_type, granted_by)
-          VALUES (@folderId, @websiteId, @permissionType, @grantedBy)
-        OUTPUT inserted.id, inserted.folder_id, inserted.website_id, 
-               inserted.permission_type, inserted.granted_by, inserted.created_at;
+          INSERT (FolderId, WebsiteId, PermissionType, GrantedBy, CreatedAt, UpdatedAt)
+          VALUES (@folderId, @websiteId, @permissionType, @grantedBy, GETUTCDATE(), GETUTCDATE())
+        OUTPUT inserted.Id, inserted.FolderId, inserted.WebsiteId, 
+               inserted.PermissionType, inserted.GrantedBy, inserted.CreatedAt, inserted.UpdatedAt;
       `);
 
     const permission = result.recordset[0];
     return {
-      id: permission.id,
-      folderId: permission.folder_id,
-      websiteId: permission.website_id,
-      permissionType: permission.permission_type,
-      grantedBy: permission.granted_by,
-      createdAt: permission.created_at
+      id: permission.Id,
+      folderId: permission.FolderId,
+      websiteId: permission.WebsiteId,
+      permissionType: permission.PermissionType,
+      grantedBy: permission.GrantedBy,
+      createdAt: permission.CreatedAt,
+      updatedAt: permission.UpdatedAt
     };
   }
 
@@ -265,8 +269,8 @@ export class MediaRepository {
       .input('folderId', folderId)
       .input('websiteId', websiteId)
       .query(`
-        DELETE FROM media_folder_website_permissions
-        WHERE folder_id = @folderId AND website_id = @websiteId
+        DELETE FROM MediaFolderWebsitePermission
+        WHERE FolderId = @folderId AND WebsiteId = @websiteId
       `);
   }
 
@@ -277,40 +281,41 @@ export class MediaRepository {
     const result = await request
       .input('folderId', folderId)
       .query(`
-        SELECT p.id, p.folder_id, p.website_id, p.permission_type, p.granted_by, p.created_at,
-               w.name as website_name, w.domain as website_domain
-        FROM media_folder_website_permissions p
-        INNER JOIN websites w ON p.website_id = w.id
-        WHERE p.folder_id = @folderId
-        ORDER BY w.name
+        SELECT p.Id, p.FolderId, p.WebsiteId, p.PermissionType, p.GrantedBy, p.CreatedAt,
+               w.Name as website_name, w.Domain as website_domain
+        FROM MediaFolderWebsitePermission p
+        INNER JOIN Website w ON p.WebsiteId = w.Id
+        WHERE p.FolderId = @folderId
+        ORDER BY w.Name
       `);
 
     return result.recordset.map(row => ({
-      id: row.id,
-      folderId: row.folder_id,
-      websiteId: row.website_id,
-      permissionType: row.permission_type,
-      grantedBy: row.granted_by,
-      createdAt: row.created_at,
+      id: row.Id,
+      folderId: row.FolderId,
+      websiteId: row.WebsiteId,
+      permissionType: row.PermissionType,
+      grantedBy: row.GrantedBy,
+      createdAt: row.CreatedAt,
       websiteName: row.website_name,
-      websiteDomain: row.website_domain
+      websiteDomain: row.website_domain,
+      updatedAt: row.UpdatedAt,
     }));
   }
 
-  async getFile(userId: string, fileId: string): Promise<MediaFile | null> {
+  async getFile(accountId: string, fileId: string): Promise<MediaFile | null> {
     const pool = await getDbConnection();
     const request = new Request(pool);
     
     const result = await request
       .input('fileId', fileId)
-      .input('userId', userId)
+      .input('accountId', accountId)
       .query(`
         SELECT 
-          id, folder_id, user_id, original_name, file_name, blob_path, blob_url,
-          file_size, mime_type, file_type, width, height, duration_seconds,
-          tags, alt_text, description, is_public, created_at, updated_at
-        FROM media_files
-        WHERE id = @fileId AND user_id = @userId AND is_deleted = 0
+          Id, FolderId, AccountId, OriginalName, FileName, BlobUrl,
+          FileSize, MimeType, FileType, HasThumbnail,
+          Tags, AltText, IsPublic, CreatedAt, UpdatedAt
+        FROM MediaFile
+        WHERE Id = @fileId AND AccountId = @accountId AND IsDeleted = 0
       `);
 
     if (result.recordset.length === 0) {
@@ -320,70 +325,58 @@ export class MediaRepository {
     const row = result.recordset[0];
     return {
       id: row.id,
-      folderId: row.folder_id,
-      userId: row.user_id,
-      originalName: row.original_name,
-      fileName: row.file_name,
-      blobPath: row.blob_path,
-      blobUrl: row.blob_url,
-      fileSize: row.file_size,
-      mimeType: row.mime_type,
-      fileType: row.file_type,
-      width: row.width,
-      height: row.height,
-      durationSeconds: row.duration_seconds,
+      folderId: row.FolderId,
+      accountId: row.AccountId,
+      originalName: row.OriginalName,
+      fileName: row.FileName,
+      blobUrl: row.BlobUrl,
+      fileSize: row.FileSize,
+      mimeType: row.MimeType,
+      fileType: row.FileType,
+      hasThumbnail: row.HasThumbnail,
       tags: row.tags ? JSON.parse(row.tags) : undefined,
-      altText: row.alt_text,
-      description: row.description,
-      isPublic: row.is_public,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
+      altText: row.AltText,
+      isPublic: row.IsPublic,
+      createdAt: row.CreatedAt,
+      updatedAt: row.UpdatedAt
     };
   } 
 
-  async getFiles(userId: string, folderId?: string): Promise<MediaFile[]> {
+  async getFiles(accountId: string, folderId?: string): Promise<MediaFile[]> {
     const pool = await getDbConnection();
     const request = new Request(pool);
     
     const result = await request
-      .input('userId', userId)
+      .input('accountId', accountId)
       .input('folderId', folderId || null)
       .query(`
         SELECT 
-          id, folder_id, user_id, original_name, file_name, blob_path, blob_url,
-          file_size, mime_type, file_type, width, height, duration_seconds,
-          thumbnail_url, thumbnail_blob_path, has_thumbnail,
-          tags, alt_text, description, is_public, created_at, updated_at
-        FROM media_files
-        WHERE user_id = @userId 
-          AND is_deleted = 0
-          AND ((@folderId IS NULL AND folder_id IS NULL) OR folder_id = @folderId)
-        ORDER BY created_at DESC
+          id, FolderId, AccountId, OriginalName, FileName, BlobUrl,
+          FileSize, MimeType, FileType, HasThumbnail,
+          tags, AltText, IsPublic, CreatedAt, UpdatedAt
+        FROM MediaFile
+        WHERE AccountId = @accountId 
+          AND IsDeleted = 0
+          AND ((@folderId IS NULL AND FolderId IS NULL) OR FolderId = @folderId)
+        ORDER BY CreatedAt DESC
       `);
 
     return result.recordset.map(row => ({
       id: row.id,
-      folderId: row.folder_id,
-      userId: row.user_id,
-      originalName: row.original_name,
-      fileName: row.file_name,
-      blobPath: row.blob_path,
-      blobUrl: row.blob_url,
-      fileSize: row.file_size,
-      mimeType: row.mime_type,
-      fileType: row.file_type,
-      width: row.width,
-      height: row.height,
-      durationSeconds: row.duration_seconds,
-      thumbnailUrl: row.thumbnail_url,
-      thumbnailBlobPath: row.thumbnail_blob_path,
-      hasThumbnail: row.has_thumbnail,
+      folderId: row.FolderId,
+      accountId: row.AccountId,
+      originalName: row.OriginalName,
+      fileName: row.FileName,
+      blobUrl: row.BlobUrl,
+      fileSize: row.FileSize,
+      mimeType: row.MimeType,
+      fileType: row.FileType,
+      hasThumbnail: row.HasThumbnail,
       tags: row.tags ? JSON.parse(row.tags) : undefined,
-      altText: row.alt_text,
-      description: row.description,
-      isPublic: row.is_public,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
+      altText: row.AltText,
+      isPublic: row.IsPublic,
+      createdAt: row.CreatedAt,
+      updatedAt: row.UpdatedAt
     }));
   }
 
@@ -393,100 +386,83 @@ export class MediaRepository {
     
     const result = await request
       .input('folderId', fileData.folderId || null)
-      .input('userId', fileData.userId)
+      .input('accountId', fileData.accountId)
       .input('originalName', fileData.originalName)
       .input('fileName', fileData.fileName)
-      .input('blobPath', fileData.blobPath)
       .input('blobUrl', fileData.blobUrl)
       .input('fileSize', fileData.fileSize)
       .input('mimeType', fileData.mimeType)
       .input('fileType', fileData.fileType)
-      .input('width', fileData.width || null)
-      .input('height', fileData.height || null)
-      .input('durationSeconds', fileData.durationSeconds || null)
-      .input('thumbnailUrl', fileData.thumbnailUrl || null)
-      .input('thumbnailBlobPath', fileData.thumbnailBlobPath || null)
       .input('hasThumbnail', fileData.hasThumbnail || false)
       .input('tags', fileData.tags ? JSON.stringify(fileData.tags) : null)
       .input('altText', fileData.altText || null)
-      .input('description', fileData.description || null)
       .input('isPublic', fileData.isPublic)
       .query(`
-        INSERT INTO media_files (
-          folder_id, user_id, original_name, file_name, blob_path, blob_url,
-          file_size, mime_type, file_type, width, height, duration_seconds,
-          thumbnail_url, thumbnail_blob_path, has_thumbnail,
-          tags, alt_text, description, is_public
+        INSERT INTO MediaFile (
+          FolderId, AccountId, OriginalName, FileName, BlobUrl,
+          FileSize, MimeType, FileType, HasThumbnail,
+          tags, AltText, IsPublic
         )
-        OUTPUT inserted.id, inserted.folder_id, inserted.user_id, inserted.original_name,
-               inserted.file_name, inserted.blob_path, inserted.blob_url, inserted.file_size,
-               inserted.mime_type, inserted.file_type, inserted.width, inserted.height,
-               inserted.duration_seconds, inserted.thumbnail_url, inserted.thumbnail_blob_path,
-               inserted.has_thumbnail, inserted.tags, inserted.alt_text, inserted.description,
-               inserted.is_public, inserted.created_at, inserted.updated_at
+        OUTPUT inserted.id, inserted.FolderId, inserted.AccountId, inserted.OriginalName,
+               inserted.FileName, inserted.BlobUrl, inserted.FileSize,
+               inserted.MimeType, inserted.FileType, inserted.HasThumbnail, 
+               inserted.tags, inserted.AltText, inserted.IsPublic, 
+               inserted.CreatedAt, inserted.UpdatedAt
         VALUES (
-          @folderId, @userId, @originalName, @fileName, @blobPath, @blobUrl,
-          @fileSize, @mimeType, @fileType, @width, @height, @durationSeconds,
-          @thumbnailUrl, @thumbnailBlobPath, @hasThumbnail,
-          @tags, @altText, @description, @isPublic
+          @folderId, @accountId, @originalName, @fileName, @blobUrl,
+          @fileSize, @mimeType, @fileType, @hasThumbnail,
+          @tags, @altText, @isPublic
         )
       `);
 
     const file = result.recordset[0];
     return {
       id: file.id,
-      folderId: file.folder_id,
-      userId: file.user_id,
-      originalName: file.original_name,
-      fileName: file.file_name,
-      blobPath: file.blob_path,
-      blobUrl: file.blob_url,
-      fileSize: file.file_size,
-      mimeType: file.mime_type,
-      fileType: file.file_type,
-      width: file.width,
-      height: file.height,
-      durationSeconds: file.duration_seconds,
-      thumbnailUrl: file.thumbnail_url,
-      thumbnailBlobPath: file.thumbnail_blob_path,
-      hasThumbnail: file.has_thumbnail,
+      folderId: file.FolderId,
+      accountId: file.AccountId,
+      originalName: file.OriginalName,
+      fileName: file.FileName,
+      blobUrl: file.BlobUrl,
+      fileSize: file.FileSize,
+      mimeType: file.MimeType,
+      fileType: file.FileType,
+      hasThumbnail: file.HasThumbnail,
       tags: file.tags ? JSON.parse(file.tags) : undefined,
-      altText: file.alt_text,
-      description: file.description,
-      isPublic: file.is_public,
-      createdAt: file.created_at,
-      updatedAt: file.updated_at
+      altText: file.AltText,
+      isPublic: file.IsPublic,
+      createdAt: file.CreatedAt,
+      updatedAt: file.UpdatedAt
     };
   }
 
-  async deleteFile(userId: string, fileId: string): Promise<void> {
+  async deleteFile(accountId: string, fileId: string): Promise<void> {
     const pool = await getDbConnection();
     const request = new Request(pool);
     
     await request
       .input('fileId', fileId)
-      .input('userId', userId)
+      .input('accountId', accountId)
       .query(`
-        UPDATE media_files 
-        SET is_deleted = 1, updated_at = GETUTCDATE()
-        WHERE id = @fileId AND user_id = @userId
+        UPDATE MediaFile 
+        SET IsDeleted = 1, UpdatedAt = GETUTCDATE()
+        WHERE id = @fileId AND AccountId = @accountId
       `);
   }
 
-  async getFileById(fileId: string, userId: string): Promise<MediaFile | null> {
+  async getFileById(fileId: string, accountId: string): Promise<MediaFile | null> {
     const pool = await getDbConnection();
     const request = new Request(pool);
     
     const result = await request
       .input('fileId', fileId)
-      .input('userId', userId)
+      .input('accountId', accountId)
       .query(`
         SELECT 
-          id, folder_id, user_id, original_name, file_name, blob_path, blob_url,
-          file_size, mime_type, file_type, width, height, duration_seconds,
-          tags, alt_text, description, is_public, created_at, updated_at
-        FROM media_files
-        WHERE id = @fileId AND user_id = @userId AND is_deleted = 0
+          id, FolderId, AccountId, OriginalName, FileName, BlobUrl,
+          FileSize, MimeType, FileType, HasThumbnail,
+          tags, AltText, IsPublic, CreatedAt, UpdatedAt
+        FROM MediaFile
+        WHERE id = @fileId AND AccountId = @accountId AND IsDeleted = 0
       `);
 
     if (result.recordset.length === 0) {
@@ -496,53 +472,49 @@ export class MediaRepository {
     const row = result.recordset[0];
     return {
       id: row.id,
-      folderId: row.folder_id,
-      userId: row.user_id,
-      originalName: row.original_name,
-      fileName: row.file_name,
-      blobPath: row.blob_path,
-      blobUrl: row.blob_url,
-      fileSize: row.file_size,
-      mimeType: row.mime_type,
-      fileType: row.file_type,
-      width: row.width,
-      height: row.height,
-      durationSeconds: row.duration_seconds,
+      folderId: row.FolderId,
+      accountId: row.AccountId,
+      originalName: row.OriginalName,
+      fileName: row.FileName,
+      blobUrl: row.BlobUrl,
+      fileSize: row.FileSize,
+      mimeType: row.MimeType,
+      fileType: row.FileType,
+      hasThumbnail: row.HasThumbnail,
       tags: row.tags ? JSON.parse(row.tags) : undefined,
-      altText: row.alt_text,
-      description: row.description,
-      isPublic: row.is_public,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
+      altText: row.AltText,
+      isPublic: row.IsPublic,
+      createdAt: row.CreatedAt,
+      updatedAt: row.UpdatedAt
     };
   }
 
-  async getFolderById(folderId: string, userId: string): Promise<MediaFolder | null> {
+  async getFolderById(folderId: string, accountId: string): Promise<MediaFolder | null> {
     const pool = await getDbConnection();
     const request = new Request(pool);
     
     const result = await request
       .input('folderId', folderId)
-      .input('userId', userId)
+      .input('accountId', accountId)
       .query(`
         SELECT 
           f.id,
           f.name,
-          f.parent_id,
-          f.user_id,
-          f.allow_website_usage,
-          f.website_usage_permissions,
-          f.description,
-          f.tags,
-          f.created_at,
-          f.updated_at,
+          f.ParentId,
+          f.AccountId,
+          f.AllowWebsiteUsage,
+          f.WebsiteUsagePermissions,
+          f.Description,
+          f.Tags,
+          f.CreatedAt,
+          f.UpdatedAt,
           COUNT(mf.id) as file_count
-        FROM media_folders f
-        LEFT JOIN media_files mf ON f.id = mf.folder_id AND mf.is_deleted = 0
+        FROM MediaFolder f
+        LEFT JOIN MediaFile mf ON f.id = mf.FolderId AND mf.IsDeleted = 0
         WHERE f.id = @folderId 
-          AND f.user_id = @userId 
-          AND f.is_deleted = 0
-        GROUP BY f.id, f.name, f.parent_id, f.user_id, f.allow_website_usage, f.website_usage_permissions, f.description, f.tags, f.created_at, f.updated_at
+          AND f.AccountId = @accountId 
+          AND f.IsDeleted = 0
+        GROUP BY f.id, f.name, f.ParentId, f.AccountId, f.AllowWebsiteUsage, f.WebsiteUsagePermissions, f.Description, f.Tags, f.CreatedAt, f.UpdatedAt
       `);
 
     if (result.recordset.length === 0) {
@@ -553,19 +525,19 @@ export class MediaRepository {
     return {
       id: row.id,
       name: row.name,
-      parentId: row.parent_id,
-      userId: row.user_id,
-      allowWebsiteUsage: row.allow_website_usage,
-      websiteUsagePermissions: row.website_usage_permissions,
-      description: row.description,
-      tags: row.tags ? JSON.parse(row.tags) : undefined,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      parentId: row.ParentId,
+      accountId: row.AccountId,
+      allowWebsiteUsage: row.AllowWebsiteUsage,
+      websiteUsagePermissions: row.WebsiteUsagePermissions,
+      description: row.Description,
+      tags: row.Tags ? JSON.parse(row.Tags) : undefined,
+      createdAt: row.CreatedAt,
+      updatedAt: row.UpdatedAt,
       fileCount: row.file_count
     };
   }
 
-  async updateFile(fileId: string, updates: Partial<Pick<MediaFile, 'folderId' | 'blobPath' | 'blobUrl' | 'thumbnailBlobPath' | 'hasThumbnail'>>): Promise<MediaFile | null> {
+  async updateFile(fileId: string, accountId: string, updates: Partial<Pick<MediaFile, 'folderId' | 'hasThumbnail'>>): Promise<MediaFile | null> {
     const pool = await getDbConnection();
     const request = new Request(pool);
     
@@ -573,56 +545,43 @@ export class MediaRepository {
     const params: Record<string, any> = {}; // Don't include fileId in params
 
     if (updates.folderId !== undefined) {
-      setParts.push('folder_id = @folderId');
+      setParts.push('FolderId = @folderId');
       params.folderId = updates.folderId;
     }
 
-    if (updates.blobPath !== undefined) {
-      setParts.push('blob_path = @blobPath');
-      params.blobPath = updates.blobPath;
-    }
-
-    if (updates.blobUrl !== undefined) {
-      setParts.push('blob_url = @blobUrl');
-      params.blobUrl = updates.blobUrl;
-    }
-
-    if (updates.thumbnailBlobPath !== undefined) {
-      setParts.push('thumbnail_blob_path = @thumbnailBlobPath');
-      params.thumbnailBlobPath = updates.thumbnailBlobPath;
-    }
-
     if (updates.hasThumbnail !== undefined) {
-      setParts.push('has_thumbnail = @hasThumbnail');
+      setParts.push('HasThumbnail = @hasThumbnail');
       params.hasThumbnail = updates.hasThumbnail;
     }
 
     if (setParts.length === 0) {
       // No updates to make
-      return await this.getFileById(fileId, ''); // We'll need to get userId somehow
+      return await this.getFileById(fileId, accountId);
     }
 
-    setParts.push('updated_at = GETUTCDATE()');
+    setParts.push('UpdatedAt = GETUTCDATE()');
 
     // Add fileId first, then other params
     request.input('fileId', fileId);
+    request.input('accountId', accountId);
     for (const [key, value] of Object.entries(params)) {
       request.input(key, value);
     }
 
     await request.query(`
-      UPDATE media_files 
+      UPDATE MediaFile 
       SET ${setParts.join(', ')}
-      WHERE id = @fileId AND is_deleted = 0
+      WHERE id = @fileId AND AccountId = @accountId AND IsDeleted = 0
     `);
 
     // Return the updated file - create a new request to avoid parameter duplication
     const selectRequest = new Request(pool);
     const result = await selectRequest
       .input('fileId', fileId)
+      .input('accountId', accountId)
       .query(`
-        SELECT * FROM media_files 
-        WHERE id = @fileId AND is_deleted = 0
+        SELECT * FROM MediaFile 
+        WHERE id = @fileId AND AccountId = @accountId AND IsDeleted = 0
       `);
 
     if (result.recordset.length === 0) {
@@ -632,27 +591,113 @@ export class MediaRepository {
     const row = result.recordset[0];
     return {
       id: row.id,
-      folderId: row.folder_id,
-      userId: row.user_id,
-      originalName: row.original_name,
-      fileName: row.file_name,
-      blobPath: row.blob_path,
-      blobUrl: row.blob_url,
-      fileSize: row.file_size,
-      mimeType: row.mime_type,
-      fileType: row.file_type,
-      width: row.width,
-      height: row.height,
-      durationSeconds: row.duration_seconds,
-      thumbnailUrl: row.thumbnail_url,
-      thumbnailBlobPath: row.thumbnail_blob_path,
-      hasThumbnail: row.has_thumbnail,
+      folderId: row.FolderId,
+      accountId: row.AccountId,
+      originalName: row.OriginalName,
+      fileName: row.FileName,
+      blobUrl: row.BlobUrl,
+      fileSize: row.FileSize,
+      mimeType: row.MimeType,
+      fileType: row.FileType,
+      hasThumbnail: row.HasThumbnail,
       tags: row.tags ? JSON.parse(row.tags) : undefined,
-      altText: row.alt_text,
-      description: row.description,
-      isPublic: row.is_public,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
+      altText: row.AltText,
+      isPublic: row.IsPublic,
+      createdAt: row.CreatedAt,
+      updatedAt: row.UpdatedAt
+    };
+  }
+
+  /**
+   * Compute blob URLs dynamically for a media file
+   */
+  async computeBlobUrls(file: MediaFile): Promise<{ blobUrl: string; thumbnailUrl?: string }> {
+    try {
+      // Get folder name if file is in a folder
+      let folderName: string | undefined;
+      if (file.folderId) {
+        const folder = await this.getFolderById(file.folderId, file.accountId);
+        if (folder) {
+          folderName = folder.name;
+        }
+      }
+
+      // Generate blob paths using centralized utility
+      const filePath = BlobPathUtils.generateFilePath(file.accountId, file.id, file.originalName, folderName);
+      
+      // Construct blob URL (you'll need to configure this based on your blob service)
+      const blobServiceUrl = process.env.AZURE_STORAGE_BLOB_URL || 'https://your-storage-account.blob.core.windows.net';
+      const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || 'photopoint-media';
+      const blobUrl = BlobPathUtils.generateBlobUrl(containerName, filePath, blobServiceUrl);
+
+      let thumbnailUrl: string | undefined;
+      if (file.hasThumbnail) {
+        const thumbnailPath = BlobPathUtils.generateThumbnailPath(file.accountId, file.id, folderName);
+        thumbnailUrl = BlobPathUtils.generateBlobUrl(containerName, thumbnailPath, blobServiceUrl);
+      }
+
+      return { blobUrl, thumbnailUrl };
+    } catch (error) {
+      logger.error('Failed to compute blob URLs:', error);
+      // Return fallback URLs
+      return { 
+        blobUrl: file.blobUrl || '', 
+        thumbnailUrl: undefined
+      };
+    }
+  }
+
+  /**
+   * Check if a file with the same originalName already exists in the target folder
+   */
+  async checkFileExistsByOriginalName(accountId: string, folderId: string | null, originalName: string): Promise<boolean> {
+    const pool = await getDbConnection();
+    const request = new Request(pool);
+    
+    let query: string;
+    if (folderId === null) {
+      // Check root folder (folderId IS NULL)
+      query = `
+        SELECT COUNT(*) as FileCount
+        FROM MediaFile 
+        WHERE AccountId = @accountId 
+          AND FolderId IS NULL 
+          AND OriginalName = @originalName 
+          AND IsDeleted = 0
+      `;
+      request.input('accountId', accountId);
+    } else {
+      // Check specific folder
+      query = `
+        SELECT COUNT(*) as FileCount
+        FROM MediaFile 
+        WHERE AccountId = @accountId 
+          AND FolderId = @folderId 
+          AND OriginalName = @originalName 
+          AND IsDeleted = 0
+      `;
+      request.input('accountId', accountId);
+      request.input('folderId', folderId);
+    }
+    
+    request.input('originalName', originalName);
+    const result = await request.query(query);
+    
+    return result.recordset[0].FileCount > 0;
+  }
+
+  /**
+   * Get a file with computed blob URLs
+   */
+  async getFileWithComputedUrls(fileId: string, accountId: string): Promise<MediaFile | null> {
+    const file = await this.getFileById(fileId, accountId);
+    if (!file) return null;
+
+    const { blobUrl, thumbnailUrl } = await this.computeBlobUrls(file);
+    
+    return {
+      ...file,
+      blobUrl
     };
   }
 }

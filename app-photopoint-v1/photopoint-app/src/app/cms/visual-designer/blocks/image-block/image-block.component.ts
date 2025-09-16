@@ -3,9 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseBlockData, BaseBlockComponent } from '../base-block.interface';
 import { PhotoService, Photo } from '../../../../services/photo.service';
-import { MediaLibraryService } from '../../../../services/media-library.service';
-import { MediaFolder, MediaFile, photoToMediaFile, getSecureMediaUrl, getSecureThumbnailUrl } from '../../../../models/media.model';
-import { switchMap, of } from 'rxjs';
+import { MediaService } from '../../../../services/media.service';
+import { MediaFolder, MediaFile, getSecureMediaUrl, getSecureThumbnailUrl } from '../../../../models/media.model';
+import { switchMap, of, firstValueFrom } from 'rxjs';
 
 interface TextOverlay {
   text: string;
@@ -73,7 +73,7 @@ export class ImageBlockComponent implements BaseBlockComponent, OnDestroy {
   @Output() editingChange = new EventEmitter<boolean>();
 
   private photoService = inject(PhotoService);
-  private mediaLibraryService = inject(MediaLibraryService);
+  private mediaService = inject(MediaService);
   
   // Signals for authenticated image URLs
   private selectedMediaFile = signal<MediaFile | null>(null);
@@ -290,11 +290,22 @@ export class ImageBlockComponent implements BaseBlockComponent, OnDestroy {
     this.showMediaLibrary = true;
     try {
       // Load available folders for the current website
-      this.availableFolders = await this.mediaLibraryService.getFolders().toPromise() || [];
+      this.availableFolders = await firstValueFrom(this.mediaService.getFolders()) || [];
       
       // Load photos from selected folder or all photos
       const filter = this.selectedFolderId ? { folderId: this.selectedFolderId } : { includeShared: true };
-      this.availablePhotos = await this.mediaLibraryService.getPhotos(filter).toPromise() || [];
+      const mediaFiles = await firstValueFrom(this.mediaService.getFiles(this.selectedFolderId, filter)) || [];
+      this.availablePhotos = mediaFiles.map(file => ({
+        id: file.id,
+        filename: file.fileName,
+        originalName: file.originalName,
+        mimeType: file.mimeType,
+        size: file.fileSize,
+        url: getSecureMediaUrl(file) || '',
+        thumbnailUrl: getSecureThumbnailUrl(file) || '',
+        uploadedAt: file.createdAt,
+        userId: file.accountId
+      }));
     } catch (error) {
       console.error('Error loading media library:', error);
     }
@@ -304,10 +315,21 @@ export class ImageBlockComponent implements BaseBlockComponent, OnDestroy {
     this.selectedFolderId = folderId;
     try {
       // Check if folder sharing allows access
-      const permission = await this.mediaLibraryService.checkFolderSharingPermission(folderId, 'current-website-id').toPromise();
+      const permission = await firstValueFrom(this.mediaService.getFolderPermissions(folderId));
       
-      if (permission?.canAccess) {
-        this.availablePhotos = await this.mediaLibraryService.getPhotos({ folderId }).toPromise() || [];
+      if (permission?.isShared) {
+        const mediaFiles = await firstValueFrom(this.mediaService.getFiles(folderId)) || [];
+        this.availablePhotos = mediaFiles.map(file => ({
+          id: file.id,
+          filename: file.fileName,
+          originalName: file.originalName,
+          mimeType: file.mimeType,
+          size: file.fileSize,
+          url: getSecureMediaUrl(file) || '',
+          thumbnailUrl: getSecureThumbnailUrl(file) || '',
+          uploadedAt: file.createdAt,
+          userId: file.accountId
+        }));
       } else {
         console.warn('Access denied to selected folder');
         this.availablePhotos = [];
@@ -325,10 +347,23 @@ export class ImageBlockComponent implements BaseBlockComponent, OnDestroy {
 
   selectImageFromLibrary(photo: Photo) {
     // Convert Photo to MediaFile to handle property differences
-    const mediaFile = photoToMediaFile(photo);
+    const mediaFile: MediaFile = {
+      id: photo.id,
+      originalName: photo.originalName,
+      fileName: photo.filename,
+      fileSize: photo.size,
+      mimeType: photo.mimeType,
+      fileType: 'image',
+      folderId: '',
+      accountId: photo.userId,
+      hasThumbnail: true,
+      isPublic: false,
+      createdAt: photo.uploadedAt,
+      updatedAt: photo.uploadedAt
+    };
     
-    // Load the authenticated image
-    this.loadAuthenticatedImage(mediaFile as MediaFile);
+    // Load the image
+    this.loadImage(mediaFile);
     
     // Store the secure URL in the content for reference, but don't use it directly for display
     const secureUrl = getSecureMediaUrl(mediaFile as MediaFile, 'original');
@@ -341,19 +376,30 @@ export class ImageBlockComponent implements BaseBlockComponent, OnDestroy {
   // Direct upload functionality
   async uploadImage(file: File, websiteName?: string) {
     try {
-      const response = await this.mediaLibraryService.uploadImage(file, {
+      const response = await firstValueFrom(this.mediaService.uploadFiles([file], {
         websiteName,
         generateThumbnails: true,
         optimizeForWeb: true
-      }).toPromise();
+      }));
       
-      if (response?.success && response.photo) {
-        this.selectImageFromLibrary(response.photo);
+      if (response?.data && response.data.length > 0) {
+        // Convert MediaFile to Photo for consistency
+        const mediaFile = response.data[0];
+        const photo: Photo = {
+          id: mediaFile.id,
+          filename: mediaFile.fileName,
+          originalName: mediaFile.originalName,
+          mimeType: mediaFile.mimeType,
+          size: mediaFile.fileSize,
+          url: getSecureMediaUrl(mediaFile) || '',
+          thumbnailUrl: getSecureThumbnailUrl(mediaFile) || '',
+          uploadedAt: mediaFile.createdAt,
+          userId: mediaFile.accountId
+        };
+        this.selectImageFromLibrary(photo);
         
         // Generate responsive variants for better performance
-        await this.mediaLibraryService.generateResponsiveVariants(response.photo.id).toPromise();
-      } else {
-        console.error('Upload failed:', response?.error);
+        await firstValueFrom(this.mediaService.generateResponsiveVariants(mediaFile.id));
       }
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -409,8 +455,8 @@ export class ImageBlockComponent implements BaseBlockComponent, OnDestroy {
     };
   }
 
-  // Load authenticated image when media file is selected
-  private loadAuthenticatedImage(mediaFile: MediaFile) {
+  // Load image when media file is selected
+  private loadImage(mediaFile: MediaFile) {
     this.selectedMediaFile.set(mediaFile);
     
     // Get secure URL for the main image

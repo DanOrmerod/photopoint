@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, firstValueFrom } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface Photo {
   id: string;
@@ -21,10 +22,19 @@ export interface Photo {
   };
 }
 
+// Updated to match new API response format
 export interface UploadResponse {
-  success: boolean;
-  photo?: Photo;
-  error?: string;
+  // API now returns direct file object or { error: 'message' }
+  id?: string;
+  filename?: string;
+  originalName?: string;
+  mimeType?: string;
+  size?: number;
+  url?: string;
+  thumbnailUrl?: string;
+  uploadedAt?: Date;
+  userId?: string;
+  error?: string; // Error format: { error: 'message' }
 }
 
 @Injectable({
@@ -32,16 +42,17 @@ export interface UploadResponse {
 })
 export class PhotoService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = 'http://localhost:3001/api/v1'; // Our Node.js API
+  private readonly apiUrl = environment.apiUrl; // Use environment config
 
   /**
    * Upload a single photo file
    */
   uploadPhoto(file: File): Observable<UploadResponse> {
     const formData = new FormData();
-    formData.append('photo', file);
+    formData.append('file', file); // Match backend field name
     
-    return this.http.post<UploadResponse>(`${this.apiUrl}/photos/upload`, formData);
+    // Use correct media upload endpoint
+    return this.http.post<UploadResponse>(`${this.apiUrl}/media/upload`, formData);
   }
 
   /**

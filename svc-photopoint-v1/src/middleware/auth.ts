@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getDbConnection } from '../database/connection';
 import sql from 'mssql';
+import { logger } from '../utils/logger';
 
 // Extend Express Request interface to include user
 declare global {
@@ -12,6 +13,7 @@ declare global {
       username?: string;
       fullName?: string;
       profilePicture?: string;
+      accountId?: string;
     }
   }
 }
@@ -23,6 +25,7 @@ export interface AuthenticatedRequest extends Request {
     username?: string;
     fullName?: string;
     profilePicture?: string;
+    accountId: string;
   };
 }
 
@@ -44,9 +47,10 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     const result = await connection.request()
       .input('userId', sql.UniqueIdentifier, decoded.id)
       .query(`
-        SELECT Id, Email, Username, FullName, ProfilePicture, IsActive
-        FROM Users 
-        WHERE Id = @userId AND IsActive = 1
+        SELECT u.Id, u.Email, u.Username, u.FullName, u.ProfilePicture, u.IsActive, ua.AccountId
+        FROM [User] u
+        INNER JOIN UserAccount ua ON u.Id = ua.UserId
+        WHERE u.Id = @userId AND u.IsActive = 1
       `);
 
     if (result.recordset.length === 0) {
@@ -60,12 +64,13 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
       email: user.Email,
       username: user.Username,
       fullName: user.FullName,
-      profilePicture: user.ProfilePicture
+      profilePicture: user.ProfilePicture,
+      accountId: user.AccountId
     };
 
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
+    logger.error('Authentication error:', error);
     if (error instanceof jwt.JsonWebTokenError) {
       res.status(401).json({ error: 'Invalid token' });
     } else {
@@ -91,9 +96,10 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     const result = await connection.request()
       .input('userId', sql.UniqueIdentifier, decoded.id) // Changed from decoded.userId to decoded.id
       .query(`
-        SELECT Id, Email, Username, FullName, ProfilePicture, IsActive
-        FROM Users 
-        WHERE Id = @userId AND IsActive = 1
+        SELECT u.Id, u.Email, u.Username, u.FullName, u.ProfilePicture, u.IsActive, ua.AccountId
+        FROM [User] u
+        INNER JOIN UserAccount ua ON u.Id = ua.UserId
+        WHERE u.Id = @userId AND u.IsActive = 1
       `);
 
     if (result.recordset.length > 0) {
@@ -103,7 +109,8 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
         email: user.Email,
         username: user.Username,
         fullName: user.FullName,
-        profilePicture: user.ProfilePicture
+        profilePicture: user.ProfilePicture,
+        accountId: user.AccountId
       };
     }
 

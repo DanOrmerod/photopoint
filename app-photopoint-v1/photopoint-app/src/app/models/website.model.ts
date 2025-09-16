@@ -9,7 +9,7 @@ export interface Website {
   theme?: string;
   pageCount?: number;
   visits?: number;
-  ownerId: string;
+  accountId: string;
   createdAt: Date;
   updatedAt: Date;
 }

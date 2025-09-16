@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { RouterTestingModule } from '@angular/router/testing';
+import { provideRouter } from '@angular/router';
 import { ContentBlockEditorComponent } from './content-block-editor.component';
 
 describe('ContentBlockEditorComponent', () => {
@@ -8,7 +8,10 @@ describe('ContentBlockEditorComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ContentBlockEditorComponent, RouterTestingModule]
+      imports: [ContentBlockEditorComponent],
+      providers: [
+        provideRouter([])
+      ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ContentBlockEditorComponent);

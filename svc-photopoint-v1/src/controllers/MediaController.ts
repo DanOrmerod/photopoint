@@ -3,13 +3,17 @@ import { blobStorageService } from '../services/blobStorageService';
 import { MediaRepository, MediaFolder, MediaFile } from '../database/repositories/MediaRepository';
 import { AuthenticatedRequest } from '../middleware/auth';
 import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import { BlobPathUtils } from '../utils/blobPathUtils';
+import { logger } from '../utils/logger';
+import { blob } from 'stream/consumers';
 
 // Conditionally import sharp
 let sharp: any;
 try {
   sharp = require('sharp');
 } catch (error) {
-  console.warn('Sharp not available - thumbnails will not be generated');
+  logger.warn('Sharp not available - thumbnails will not be generated');
 }
 
 // Configure multer for file uploads
@@ -45,25 +49,49 @@ const upload = multer({
 export class MediaController {
   private static mediaRepository = new MediaRepository();
 
+  /**
+   * Sanitize MediaFile objects for client consumption by removing internal properties
+   */
+  private static sanitizeMediaFile(file: MediaFile): Omit<MediaFile, 'blobUrl'> {
+    const { blobUrl, ...sanitizedFile } = file;
+    return sanitizedFile;
+  }
+
+  /**
+   * Sanitize array of MediaFile objects for client consumption
+   */
+  private static sanitizeMediaFiles(files: MediaFile[]): Omit<MediaFile, 'blobUrl'>[] {
+    return files.map(file => this.sanitizeMediaFile(file));
+  }
+
+  // Helper method to get folder name by ID
+  private static async getFolderNameById(folderId: string, accountId: string): Promise<string | undefined> {
+    try {
+      const folder = await this.mediaRepository.getFolderById(folderId, accountId);
+      return folder?.name;
+    } catch (error) {
+      logger.error(`Failed to get folder name for ID ${folderId}:`, error);
+      return undefined;
+    }
+  }
+
   // Get all folders
   static async getFolders(req: Request, res: Response): Promise<void> {
     try {
       const { parentId } = req.query;
-      const userId = (req as AuthenticatedRequest).user.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
 
-      const folders = await MediaController.mediaRepository.getFolders(userId, parentId as string);
+      if (!accountId) {
+        res.status(400).json({ error: 'Account ID not found in request' });
+        return;
+      }
+
+      const folders = await MediaController.mediaRepository.getFolders(accountId, parentId as string);
       
-      res.json({
-        success: true,
-        data: folders
-      });
+      res.json(folders);
     } catch (error) {
-      console.error('Failed to get folders:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to retrieve folders',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to get folders:', error);
+      res.status(500).json({ error: 'Failed to retrieve folders' });
     }
   }
 
@@ -71,29 +99,27 @@ export class MediaController {
   static async createFolder(req: Request, res: Response): Promise<void> {
     try {
       const { name, parentId } = req.body;
-      const userId = (req as AuthenticatedRequest).user.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
       
-      if (!name || typeof name !== 'string' || name.trim().length === 0) {
-        res.status(400).json({
-          success: false,
-          message: 'Folder name is required'
-        });
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
-      const folder = await MediaController.mediaRepository.createFolder(name.trim(), userId, parentId);
-      
+      if (!name || typeof name !== 'string' || name.trim() === '') {
+        res.status(400).json({ error: 'Folder name is required' });
+        return;
+      }
+
+      const folder = await MediaController.mediaRepository.createFolder(name.trim(), accountId, parentId);
+
       res.status(201).json({
-        success: true,
-        data: folder
+        data: folder,
+        message: 'Folder created successfully'
       });
     } catch (error) {
-      console.error('Failed to create folder:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to create folder',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to create folder:', error);
+      res.status(500).json({ error: 'Failed to create folder' });
     }
   }
 
@@ -101,29 +127,24 @@ export class MediaController {
   static async deleteFolder(req: Request, res: Response): Promise<void> {
     try {
       const { folderId } = req.params;
-      const userId = (req as AuthenticatedRequest).user.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
+      
+      if (!accountId) {
+        res.status(400).json({ error: 'Account ID not found in request' });
+        return;
+      }
       
       if (!folderId) {
-        res.status(400).json({
-          success: false,
-          message: 'Folder ID is required'
-        });
+        res.status(400).json({ error: 'Folder ID is required' });
         return;
       }
 
-      await MediaController.mediaRepository.deleteFolder(folderId, userId);
+      await MediaController.mediaRepository.deleteFolder(folderId, accountId);
       
-      res.json({
-        success: true,
-        message: 'Folder deleted successfully'
-      });
+      res.json({ message: 'Folder deleted successfully' });
     } catch (error) {
-      console.error('Failed to delete folder:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete folder',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to delete folder:', error);
+      res.status(500).json({ error: 'Failed to delete folder' });
     }
   }
 
@@ -131,35 +152,33 @@ export class MediaController {
   static async updateFolderSettings(req: Request, res: Response): Promise<void> {
     try {
       const { folderId } = req.params;
-      const userId = (req as AuthenticatedRequest).user.id;
-      const { allowWebsiteUsage, websiteUsagePermissions, description, tags } = req.body;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
       
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+
+      const { allowWebsiteUsage, websiteUsagePermissions, description, tags } = req.body;
+
       if (!folderId) {
-        res.status(400).json({
-          success: false,
-          message: 'Folder ID is required'
-        });
+        res.status(400).json({ error: 'Folder ID is required' });
         return;
       }
 
       const updatedFolder = await MediaController.mediaRepository.updateFolderSettings(
-        folderId, 
-        userId, 
+        folderId,
+        accountId,
         { allowWebsiteUsage, websiteUsagePermissions, description, tags }
       );
-      
+
       res.json({
-        success: true,
         data: updatedFolder,
         message: 'Folder settings updated successfully'
       });
     } catch (error) {
-      console.error('Failed to update folder settings:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update folder settings',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to update folder settings:', error);
+      res.status(500).json({ error: 'Failed to update folder settings' });
     }
   }
 
@@ -167,13 +186,23 @@ export class MediaController {
   static async grantFolderWebsitePermission(req: Request, res: Response): Promise<void> {
     try {
       const { folderId } = req.params;
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = (req as AuthenticatedRequest).user.id; 
+      
+      if (!userId) {
+        res.status(400).json({ error: 'User not authenticated' });
+        return;
+      }
+      const accountId = (req as AuthenticatedRequest).user.accountId;
+      
+      if (!accountId) {
+        res.status(400).json({ error: 'Account ID not found in request' });
+        return;
+      }
       const { websiteId, permissionType = 'read' } = req.body;
       
       if (!folderId || !websiteId) {
         res.status(400).json({
-          success: false,
-          message: 'Folder ID and Website ID are required'
+          error: 'Folder ID and Website ID are required'
         });
         return;
       }
@@ -186,16 +215,14 @@ export class MediaController {
       );
       
       res.json({
-        success: true,
         data: permission,
         message: 'Website permission granted successfully'
+      
       });
     } catch (error) {
-      console.error('Failed to grant website permission:', error);
+      logger.error('Failed to grant website permission:', error);
       res.status(500).json({
-        success: false,
-        message: 'Failed to grant website permission',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to grant website permission',
       });
     }
   }
@@ -207,24 +234,19 @@ export class MediaController {
       
       if (!folderId || !websiteId) {
         res.status(400).json({
-          success: false,
-          message: 'Folder ID and Website ID are required'
+          error: 'Folder ID and Website ID are required'
         });
         return;
       }
 
       await MediaController.mediaRepository.revokeFolderWebsitePermission(folderId, websiteId);
       
-      res.json({
-        success: true,
-        message: 'Website permission revoked successfully'
-      });
+      res.json({ message: 'Website permission revoked successfully'
+       });
     } catch (error) {
-      console.error('Failed to revoke website permission:', error);
+      logger.error('Failed to revoke website permission:', error);
       res.status(500).json({
-        success: false,
-        message: 'Failed to revoke website permission',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to revoke website permission',
       });
     }
   }
@@ -236,24 +258,19 @@ export class MediaController {
       
       if (!folderId) {
         res.status(400).json({
-          success: false,
-          message: 'Folder ID is required'
+          error: 'Folder ID is required'
         });
         return;
       }
 
       const permissions = await MediaController.mediaRepository.getFolderWebsitePermissions(folderId);
       
-      res.json({
-        success: true,
-        data: permissions
-      });
+      res.json(permissions
+      );
     } catch (error) {
-      console.error('Failed to get folder permissions:', error);
+      logger.error('Failed to get folder permissions:', error);
       res.status(500).json({
-        success: false,
-        message: 'Failed to get folder permissions',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to get folder permissions',
       });
     }
   }
@@ -262,21 +279,20 @@ export class MediaController {
   static async getFiles(req: Request, res: Response): Promise<void> {
     try {
       const { folderId } = req.query;
-      const userId = (req as AuthenticatedRequest).user.id;
-
-      const files = await MediaController.mediaRepository.getFiles(userId, folderId as string);
+      const accountId = (req as AuthenticatedRequest).user.accountId;
       
-      res.json({
-        success: true,
-        data: files
-      });
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+
+      const files = await MediaController.mediaRepository.getFiles(accountId, folderId as string);
+      const sanitizedFiles = MediaController.sanitizeMediaFiles(files);
+
+      res.json(sanitizedFiles);
     } catch (error) {
-      console.error('Failed to get files:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to retrieve files',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to get files:', error);
+      res.status(500).json({ error: 'Failed to retrieve files' });
     }
   }
 
@@ -289,17 +305,32 @@ export class MediaController {
     try {
       const filesArray = req.files as Express.Multer.File[];
       const { folderId } = req.body;
-      const userId = (req as AuthenticatedRequest).user.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
+      
+      if (!accountId) {
+        res.status(400).json({ error: 'Account ID not found in request' });
+        return;
+      }
       
       // Handle files from upload.any() - always comes as array
       const files: Express.Multer.File[] = Array.isArray(filesArray) ? filesArray : [];
       
       if (!files || files.length === 0) {
         res.status(400).json({
-          success: false,
-          message: 'No files provided'
+          error: 'No files provided'
         });
         return;
+      }
+
+      // Get folder information if folderId is provided
+      let folderName: string | undefined;
+      if (folderId) {
+        const folder = await MediaController.mediaRepository.getFolderById(folderId, accountId);
+        if (!folder) {
+          res.status(400).json({ error: 'Folder not found' });
+          return;
+        }
+        folderName = folder.name;
       }
 
       // Upload files to blob storage and create database records
@@ -315,22 +346,27 @@ export class MediaController {
           })}`);
         }
 
-        console.log('Processing file upload:', {
+        console.debug('Processing file upload:', {
           originalname: file.originalname,
           size: file.size,
           mimetype: file.mimetype,
           fieldname: file.fieldname
         });
 
+        // Generate unique file ID
+        const fileId = uuidv4();
+
         // Upload to blob storage
         const blobResult = await blobStorageService.uploadFile(
           file.buffer,
           file.originalname,
           file.mimetype,
-          folderId
+          accountId,
+          fileId,
+          folderName
         );
 
-        console.log('Blob upload result:', {
+        console.debug('Blob upload result:', {
           id: blobResult.id,
           name: blobResult.name,
           originalName: blobResult.originalName,
@@ -339,13 +375,13 @@ export class MediaController {
         });
 
         // Generate thumbnail for images
-        let thumbnailBlobPath: string | undefined;
         let hasThumbnail = false;
         
         if (file.mimetype.startsWith('image/') && sharp) {
           try {
             // Generate thumbnail using Sharp
             const thumbnailBuffer = await sharp(file.buffer)
+              .rotate() // Automatically rotates based on EXIF metadata
               .resize(300, 300, { 
                 fit: 'inside',
                 withoutEnlargement: true 
@@ -353,13 +389,23 @@ export class MediaController {
               .jpeg({ quality: 80 })
               .toBuffer();
 
-            // We'll upload the thumbnail after creating the database record
-            // so we can use the proper file ID in the thumbnail path
-            // Store the thumbnail buffer temporarily
-            (file as any).thumbnailBuffer = thumbnailBuffer;
-            hasThumbnail = true;
+            // upload the thumbnail to blob storage
+            const thumbnailBlobPath = await blobStorageService.uploadThumbnail(
+              thumbnailBuffer,
+              file.originalname,
+              accountId,
+              fileId,
+              folderName
+            );
+            if (thumbnailBlobPath) {
+              hasThumbnail = true;
+              console.debug('Thumbnail uploaded at path:', thumbnailBlobPath);
+            }
+            else {
+              logger.error('Thumbnail upload failed:', fileId);
+            } 
           } catch (error) {
-            console.error('Failed to generate thumbnail:', error);
+            logger.error('Failed to generate thumbnail:', error);
             // Continue without thumbnail if generation fails
           }
         }
@@ -367,59 +413,28 @@ export class MediaController {
         // Create database record with validated properties
         const fileData = {
           folderId: folderId || undefined,
-          userId: userId,
+          accountId: accountId,
           originalName: file.originalname || blobResult.originalName,
-          fileName: blobResult.name,
-          blobPath: blobResult.name,
-          blobUrl: blobResult.url,
+          fileName: BlobPathUtils.generateBlobFileName(fileId, file.originalname),
+          blobUrl: blobResult.url, // store the dynamically computed url for record keeping
           fileSize: file.size || blobResult.size, // Use original file size, fallback to blob size
           mimeType: file.mimetype || blobResult.mimeType,
           fileType: (file.mimetype || blobResult.mimeType).startsWith('image/') ? 'image' as const : 'video' as const,
-          thumbnailUrl: undefined, // Will be set after thumbnail upload
-          thumbnailBlobPath: undefined, // Will be set after thumbnail upload
-          hasThumbnail: false, // Will be updated after thumbnail upload
+          hasThumbnail: hasThumbnail, 
           isPublic: false
         };
 
-        console.log('Creating database record with:', fileData);
+        logger.debug('Creating database record with:', fileData);
 
         const savedFile = await MediaController.mediaRepository.createFile(fileData);
-        
-        // Now upload the thumbnail with the correct file ID
-        if (hasThumbnail && (file as any).thumbnailBuffer) {
-          try {
-            const thumbnailName = `${folderId || 'root'}/${savedFile.id}_thumb`;
-            const thumbnailResult = await blobStorageService.uploadFile(
-              (file as any).thumbnailBuffer,
-              `${savedFile.originalName}_thumb.jpg`,
-              'image/jpeg',
-              folderId
-            );
-            
-            // Update the database record with thumbnail information
-            const updatedFile = await MediaController.mediaRepository.updateFile(savedFile.id, {
-              thumbnailBlobPath: thumbnailResult.name,
-              hasThumbnail: true
-            });
-            
-            if (updatedFile) {
-              console.log(`Thumbnail created for file ${savedFile.id}: ${thumbnailResult.name}`);
-              return updatedFile;
-            }
-          } catch (thumbnailError) {
-            console.error('Failed to upload thumbnail:', thumbnailError);
-            // Continue with the file without thumbnail
-          }
-        }
-        
-        console.log('Database record created:', {
+                
+        logger.debug('Database record created:', {
           id: savedFile.id,
           originalName: savedFile.originalName,
           fileName: savedFile.fileName,
           fileSize: savedFile.fileSize,
           mimeType: savedFile.mimeType,
           blobUrl: savedFile.blobUrl,
-          thumbnailBlobPath: savedFile.thumbnailBlobPath,
           hasThumbnail: savedFile.hasThumbnail
         });
         
@@ -427,18 +442,16 @@ export class MediaController {
       });
 
       const uploadedFiles = await Promise.all(uploadPromises);
+      const sanitizedFiles = MediaController.sanitizeMediaFiles(uploadedFiles);
       
       res.status(201).json({
-        success: true,
-        data: uploadedFiles,
+        data: sanitizedFiles,
         message: `${uploadedFiles.length} file(s) uploaded successfully`
       });
     } catch (error) {
-      console.error('Failed to upload files:', error);
+      logger.error('Failed to upload files:', error);
       res.status(500).json({
-        success: false,
-        message: 'Failed to upload files',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to upload files',
       });
     }
   }
@@ -447,91 +460,86 @@ export class MediaController {
   static async deleteFile(req: Request, res: Response): Promise<void> {
     try {
       const { fileId } = req.params;
-      const userId = (req as AuthenticatedRequest).user.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
       
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+
       if (!fileId) {
-        res.status(400).json({
-          success: false,
-          message: 'File ID is required'
-        });
+        res.status(400).json({ error: 'File ID is required' });
         return;
       }
 
-      // First get the file details to get blob path for deletion
-      const fileToDelete = await MediaController.mediaRepository.getFile(userId, fileId);
-      
+      const fileToDelete = await MediaController.mediaRepository.getFileById(fileId, accountId);
+
       if (!fileToDelete) {
-        res.status(404).json({
-          success: false,
-          message: 'File not found'
-        });
+        res.status(404).json({ error: 'File not found' });
         return;
       }
 
-      // Delete from blob storage using the blob path
-      await blobStorageService.deleteFile(fileId, fileToDelete.folderId);
-      
-      // Delete from database
-      await MediaController.mediaRepository.deleteFile(fileId, userId);
-      
-      res.json({
-        success: true,
-        message: 'File deleted successfully'
-      });
+      // Get folder name if file is in a folder
+      let folderName: string | undefined;
+      if (fileToDelete.folderId) {
+        const folder = await MediaController.mediaRepository.getFolderById(fileToDelete.folderId, accountId);
+        if (folder) {
+          folderName = folder.name;
+        }
+      }
+
+      await blobStorageService.deleteFile(accountId, fileToDelete.fileName, folderName);
+      await MediaController.mediaRepository.deleteFile(accountId, fileId);
+
+      res.json({ message: 'File deleted successfully' });
     } catch (error) {
-      console.error('Failed to delete file:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete file',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to delete file:', error);
+      res.status(500).json({ error: 'Failed to delete file' });
     }
   }
 
   // FR-CMS-018: Check folder sharing permissions
   static async checkFolderSharingPermission(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
+      
+      if (!accountId) {
+        res.status(400).json({ error: 'Account ID not found in request' });
+        return;
+      }
       const { folderId, websiteId } = req.params;
       
       if (!folderId || !websiteId) {
         res.status(400).json({
-          success: false,
-          message: 'Folder ID and Website ID are required'
+          error: 'Folder ID and Website ID are required'
         });
         return;
       }
 
       // Check if user owns the folder or if it's shared
-      const folders = await MediaController.mediaRepository.getFolders(userId);
+      const folders = await MediaController.mediaRepository.getFolders(accountId);
       const folder = folders.find(f => f.id === folderId);
       
       if (!folder) {
         res.status(404).json({
-          success: false,
-          message: 'Folder not found'
+          error: 'Folder not found'
         });
         return;
       }
 
       // For now, assume access is granted if user owns the folder or if it's marked as shared
       // In a real implementation, you'd check specific sharing permissions
-      const canAccess = folder.userId === userId || folder.allowWebsiteUsage;
+      const canAccess = folder.accountId === accountId || folder.allowWebsiteUsage;
       
       res.json({
-        success: true,
-        data: {
-          canAccess,
-          isOwner: folder.userId === userId,
-          sharedAt: folder.allowWebsiteUsage ? folder.createdAt : null
-        }
+        canAccess,
+        isOwner: folder.accountId === accountId,
+        sharedAt: folder.allowWebsiteUsage ? folder.createdAt : null
       });
     } catch (error) {
-      console.error('Failed to check folder sharing permission:', error);
+      logger.error('Failed to check folder sharing permission:', error);
       res.status(500).json({
-        success: false,
-        message: 'Failed to check folder permissions',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to check folder permissions',
       });
     }
   }
@@ -539,101 +547,86 @@ export class MediaController {
   // FR-CMS-018: Generate responsive image variants
   static async generateResponsiveVariants(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
+      
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+
       const { photoId } = req.params;
       const { breakpoints = [320, 640, 1024, 1920] } = req.body;
-      
+
       if (!photoId) {
-        res.status(400).json({
-          success: false,
-          message: 'Photo ID is required'
-        });
+        res.status(400).json({ error: 'Photo ID is required' });
         return;
       }
 
-      // Get the original photo details
-      const files = await MediaController.mediaRepository.getFiles(userId);
+      const files = await MediaController.mediaRepository.getFiles(accountId);
       const photo = files.find(f => f.id === photoId);
-      
+
       if (!photo) {
-        res.status(404).json({
-          success: false,
-          message: 'Photo not found'
-        });
+        res.status(404).json({ error: 'Photo not found' });
         return;
       }
 
-      // Generate responsive variants (this would use image processing library like Sharp)
       const variants = await Promise.all(
         breakpoints.map(async (width: number) => {
-          // In a real implementation, you'd resize the image and upload the variant
-          // For now, we'll return mock data
           return {
             width,
             url: `${photo.blobUrl}?w=${width}`,
-            size: Math.round(photo.fileSize * (width / 1920)) // Estimated size
+            size: Math.round(photo.fileSize * (width / 1920))
           };
         })
       );
 
-      res.json({
-        success: true,
-        data: {
-          variants
-        }
-      });
+      res.json({ variants });
     } catch (error) {
-      console.error('Failed to generate responsive variants:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to generate responsive variants',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to generate responsive variants:', error);
+      res.status(500).json({ error: 'Failed to generate responsive variants' });
     }
   }
 
   // FR-CMS-018: Get folder permissions and sharing settings
   static async getFolderPermissions(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
+      
+      if (!accountId) {
+        res.status(400).json({ error: 'Account ID not found in request' });
+        return;
+      }
       const { folderId } = req.params;
       
       if (!folderId) {
         res.status(400).json({
-          success: false,
-          message: 'Folder ID is required'
+          error: 'Folder ID is required'
         });
         return;
       }
 
-      const folders = await MediaController.mediaRepository.getFolders(userId);
+      const folders = await MediaController.mediaRepository.getFolders(accountId);
       const folder = folders.find(f => f.id === folderId);
       
       if (!folder) {
         res.status(404).json({
-          success: false,
-          message: 'Folder not found'
+          error: 'Folder not found'
         });
         return;
       }
 
       res.json({
-        success: true,
-        data: {
-          isShared: folder.allowWebsiteUsage || false,
-          allowedWebsites: [], // This would be implemented based on your sharing model
-          owner: {
-            id: folder.userId,
-            name: 'User Name' // You'd get this from user repository
-          }
+        isShared: folder.allowWebsiteUsage || false,
+        allowedWebsites: [], // This would be implemented based on your sharing model
+        owner: {
+          id: folder.accountId,
+          name: 'User Name' // You'd get this from user repository
         }
       });
     } catch (error) {
-      console.error('Failed to get folder permissions:', error);
+      logger.error('Failed to get folder permissions:', error);
       res.status(500).json({
-        success: false,
-        message: 'Failed to get folder permissions',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to get folder permissions',
       });
     }
   }
@@ -641,14 +634,17 @@ export class MediaController {
   // FR-CMS-018: Enhanced upload with auto-folder creation
   static async uploadWithAutoFolder(req: Request, res: Response): Promise<void> {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
-      const { autoCreateFolder, folderId, generateThumbnails, optimizeForWeb } = req.body;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
       
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+
+      const { autoCreateFolder, folderId, generateThumbnails, optimizeForWeb } = req.body;
+
       if (!req.file) {
-        res.status(400).json({
-          success: false,
-          message: 'No file provided'
-        });
+        res.status(400).json({ error: 'No file provided' });
         return;
       }
 
@@ -657,45 +653,52 @@ export class MediaController {
       // Auto-create folder if specified
       if (autoCreateFolder && !folderId) {
         try {
-          // Check if folder already exists
-          const existingFolders = await MediaController.mediaRepository.getFolders(userId);
+          const existingFolders = await MediaController.mediaRepository.getFolders(accountId);
           const existingFolder = existingFolders.find(f => f.name === autoCreateFolder);
-          
+
           if (existingFolder) {
             targetFolderId = existingFolder.id;
           } else {
-            // Create new folder
-            const newFolder = await MediaController.mediaRepository.createFolder(autoCreateFolder, userId);
+            const newFolder = await MediaController.mediaRepository.createFolder(autoCreateFolder, accountId);
             targetFolderId = newFolder.id;
           }
         } catch (error) {
-          console.error('Failed to auto-create folder:', error);
-          // Continue with upload to default location
+          logger.error('Failed to auto-create folder:', error);
         }
       }
 
-      // Upload the file
       const file = req.file;
-      
-      // Upload to blob storage
+
+      // Get folder name if file is going into a folder
+      let folderName: string | undefined;
+      if (targetFolderId) {
+        const folder = await MediaController.mediaRepository.getFolderById(targetFolderId, accountId);
+        if (folder) {
+          folderName = folder.name;
+        }
+      }
+
+      // Generate unique file ID
+      const fileId = uuidv4();
+
       const uploadResult = await blobStorageService.uploadFile(
-        file.buffer, 
-        file.originalname, 
-        file.mimetype, 
-        targetFolderId || undefined
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        accountId,
+        fileId,
+        folderName
       );
 
-      // Save file metadata to database
       const mediaFile = await MediaController.mediaRepository.createFile({
         originalName: uploadResult.originalName,
-        fileName: uploadResult.name,
-        blobPath: uploadResult.url, // Using url as blobPath for now
-        blobUrl: uploadResult.url,
+        fileName: BlobPathUtils.generateBlobFileName(fileId, file.originalname),
+        blobUrl: uploadResult.url, // Use the blob URL from upload result
         fileSize: uploadResult.size,
         mimeType: uploadResult.mimeType,
         fileType: uploadResult.type,
         folderId: targetFolderId || undefined,
-        userId: userId,
+        accountId: accountId,
         isPublic: false
       });
 
@@ -703,18 +706,11 @@ export class MediaController {
       // TODO: If optimizeForWeb is true, optimize the image
 
       res.json({
-        success: true,
-        data: {
-          photo: mediaFile
-        }
+        photo: mediaFile
       });
     } catch (error) {
-      console.error('Failed to upload with auto folder:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to upload file',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to upload with auto folder:', error);
+      res.status(500).json({ error: 'Failed to upload file' });
     }
   }
 
@@ -728,17 +724,13 @@ export class MediaController {
       // Test blob storage connection
       await blobStorageService.listFolders();
       
-      res.json({
-        success: true,
-        message: 'Media service is healthy (database + blob storage)',
+      res.json({ message: 'Media service is healthy (database + blob storage)',
         timestamp: new Date().toISOString()
-      });
+       });
     } catch (error) {
-      console.error('Media service health check failed:', error);
+      logger.error('Media service health check failed:', error);
       res.status(500).json({
-        success: false,
-        message: 'Media service is unhealthy',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: 'Media service is unhealthy',
         timestamp: new Date().toISOString()
       });
     }
@@ -748,69 +740,76 @@ export class MediaController {
   static async serveFile(req: Request, res: Response): Promise<void> {
     try {
       const { fileId } = req.params;
-      const { type = 'original' } = req.query; // 'original' or 'thumbnail'
-      const userId = (req as AuthenticatedRequest).user.id;
-      
+      const { type = 'original' } = req.query;
+      const accountId = (req as AuthenticatedRequest).user?.accountId;
+
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
+        return;
+      }
+
       if (!fileId) {
-        res.status(400).json({
-          success: false,
-          message: 'File ID is required'
-        });
+        res.status(400).json({ error: 'File ID is required' });
         return;
       }
 
-      // Get the file record to verify ownership and get blob path
-      const file = await MediaController.mediaRepository.getFile(userId, fileId);
-      
+      const file = await MediaController.mediaRepository.getFileById(fileId, accountId);
+
       if (!file) {
-        res.status(404).json({
-          success: false,
-          message: 'File not found or access denied'
-        });
+        res.status(404).json({ error: 'File not found or access denied' });
         return;
       }
 
-      // Determine which file to serve
-      let blobPath: string;
+      // Get folder name if file is in a folder
+      let folderName: string | undefined;
+      if (file.folderId) {
+        const folder = await MediaController.mediaRepository.getFolderById(file.folderId, accountId);
+        if (folder) {
+          folderName = folder.name;
+        }
+      }
+
+      // Determine if we're serving a thumbnail or original file
+      const isThumbnail = type === 'thumbnail' && file.hasThumbnail;
       let mimeType: string;
-      
-      if (type === 'thumbnail' && file.hasThumbnail && file.thumbnailBlobPath) {
-        blobPath = file.thumbnailBlobPath;
-        mimeType = 'image/jpeg'; // Thumbnails are always JPEG
+      let fileBlobPath: string;
+
+      if (isThumbnail) {
+        mimeType = 'image/jpeg';
+        fileBlobPath = BlobPathUtils.getThumbnailPath(file.accountId, file.fileName, folderName);
       } else {
-        blobPath = file.blobPath;
         mimeType = file.mimeType;
+        fileBlobPath = BlobPathUtils.getFilePath(file.accountId, file.fileName, folderName);
       }
 
-      // Get the file from blob storage
-      const blobData = await blobStorageService.getFileBuffer(blobPath, file.folderId);
-      
+      logger.debug('Serving file:', {
+        fileId: file.id,
+        originalName: file.originalName,
+        fileName: fileBlobPath,
+        mimeType: mimeType,
+        isThumbnail: isThumbnail,
+        folderName: folderName
+      });
+
+      const blobData = await blobStorageService.getFileBuffer(fileBlobPath);
+
       if (!blobData) {
-        res.status(404).json({
-          success: false,
-          message: 'File content not found'
-        });
+        res.status(404).json({ error: 'File content not found' });
         return;
       }
 
-      // Set appropriate headers
       res.set({
         'Content-Type': mimeType,
         'Content-Length': blobData.length.toString(),
-        'Cache-Control': 'private, max-age=3600', // Cache for 1 hour, but private
+        'Cache-Control': 'private, max-age=3600',
         'ETag': `"${file.id}-${type}"`,
         'Content-Disposition': type === 'thumbnail' ? 'inline' : `inline; filename="${file.originalName}"`
       });
 
-      // Send the file data
       res.send(blobData);
     } catch (error) {
-      console.error('Failed to serve file:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to serve file',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to serve file:', error);
+      res.status(500).json({ error: 'Failed to serve file' });
     }
   }
 
@@ -818,213 +817,140 @@ export class MediaController {
   static async copyFiles(req: Request, res: Response): Promise<void> {
     try {
       const { fileIds, targetFolderId } = req.body;
-      const userId = (req as AuthenticatedRequest).user?.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
 
-      if (!userId) {
-        res.status(401).json({ success: false, message: 'User not authenticated' });
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
       if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
-        res.status(400).json({ success: false, message: 'File IDs are required' });
+        res.status(400).json({ error: 'File IDs are required' });
         return;
       }
 
       if (!targetFolderId) {
-        res.status(400).json({ success: false, message: 'Target folder ID is required' });
+        res.status(400).json({ error: 'Target folder ID is required' });
         return;
       }
 
-      // Verify target folder exists and user has access
-      const targetFolder = await MediaController.mediaRepository.getFolderById(targetFolderId, userId);
+      const targetFolder = await MediaController.mediaRepository.getFolderById(targetFolderId, accountId);
       if (!targetFolder) {
-        res.status(404).json({ success: false, message: 'Target folder not found' });
+        res.status(404).json({ error: 'Target folder not found' });
         return;
       }
 
       const copiedFiles: MediaFile[] = [];
+      const skippedFiles: Array<{fileId: string, originalName: string, reason: string}> = [];
 
       for (const fileId of fileIds) {
-        // Get the original file
-        const originalFile = await MediaController.mediaRepository.getFileById(fileId, userId);
+        const originalFile = await MediaController.mediaRepository.getFileById(fileId, accountId);
         if (!originalFile) {
-          console.warn(`File ${fileId} not found, skipping`);
+          logger.warn(`File ${fileId} not found, skipping copy operation`);
+          skippedFiles.push({
+            fileId, 
+            originalName: 'Unknown', 
+            reason: 'File not found'
+          });
           continue;
         }
 
         try {
-          // Generate the new blob paths using a temporary file ID
-          const tempFileId = `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const originalBlobName = originalFile.blobPath; // Use actual blob path from database
-          const newBlobName = `${targetFolderId}/${tempFileId}`;
-          const newBlobUrl = `${process.env.BLOB_BASE_URL || 'http://localhost:10000/devstoreaccount1/media'}/${newBlobName}`;
-
-          console.log(`Copying blob from ${originalBlobName} to ${newBlobName}`);
+          // Check if file with same originalName already exists in target folder
+          const fileExists = await MediaController.mediaRepository.checkFileExistsByOriginalName(
+            accountId, 
+            targetFolderId, 
+            originalFile.originalName
+          );
           
-          let blobCopied = false;
-          try {
-            // Copy the original file in blob storage
-            await blobStorageService.copyBlob(originalBlobName, newBlobName);
-            blobCopied = true;
-            console.log(`Successfully copied blob for file ${fileId}`);
-          } catch (blobError) {
-            const errorMessage = blobError instanceof Error ? blobError.message : 'Unknown error';
-            console.warn(`Blob not found for file ${fileId}, creating database record only:`, errorMessage);
-            // Continue with database record creation even if blob doesn't exist
+          if (fileExists) {
+            logger.warn(`File '${originalFile.originalName}' already exists in target folder, skipping copy operation`);
+            skippedFiles.push({
+              fileId, 
+              originalName: originalFile.originalName, 
+              reason: 'File with same name already exists in target folder'
+            });
+            continue;
           }
 
-          // Copy thumbnail if it exists
-          let newThumbnailBlobPath: string | undefined;
-          if (originalFile.thumbnailBlobPath) {
-            const thumbnailBlobName = originalFile.thumbnailBlobPath; // Use actual thumbnail path from database
-            const newThumbnailBlobName = `${targetFolderId}/${tempFileId}_thumb`;
-            
-            try {
-              console.log(`Copying thumbnail from ${thumbnailBlobName} to ${newThumbnailBlobName}`);
-              await blobStorageService.copyBlob(thumbnailBlobName, newThumbnailBlobName);
-              newThumbnailBlobPath = newThumbnailBlobName;
-            } catch (thumbnailError) {
-              const errorMessage = thumbnailError instanceof Error ? thumbnailError.message : 'Unknown error';
-              console.warn(`Failed to copy thumbnail for file ${fileId}:`, errorMessage);
+          // Get folder information for the original file
+          let originalFolderName: string | undefined;
+          if (originalFile.folderId) {
+            const originalFolder = await MediaController.mediaRepository.getFolderById(originalFile.folderId, accountId);
+            if (originalFolder) {
+              originalFolderName = originalFolder.name;
             }
           }
 
-          // Create the database record with the correct blob paths
+          // Generate the original blob path using centralized utility
+          // const originalFileName = BlobPathUtils.generateBlobFileName(originalFile.id, originalFile.originalName);
+          // const originalBlobPath = BlobPathUtils.getFilePath(originalFile.accountId, originalFile.fileName, originalFolderName);
+          
+          // TODO: Update this blob copying operation to work with new structure
+          // For now, this operation may not work correctly with the new blob structure
+          // const tempFileId = `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          // const originalBlobName = originalBlobPath;
+          // const newBlobName = `${targetFolderId}/${tempFileId}`;
+          // const newBlobUrl = `${process.env.BLOB_BASE_URL || 'http://localhost:10000/devstoreaccount1/media'}/${newBlobName}`;
+          // Generate a new unique filename for the copied file to avoid conflicts
+          const fileExtension = originalFile.originalName.split('.').pop() || '';
+          const newFileName = `${uuidv4()}.${fileExtension}`;
+          
+          let newBlobUrl = '';
+          let blobCopied = false;
+          try {
+            newBlobUrl = await blobStorageService.copyFile(accountId, originalFile.fileName, originalFolderName, targetFolder.name, newFileName);
+            blobCopied = true;
+            logger.info(`Successfully copied blob for file ${fileId}`);
+          } catch (blobError) {
+            logger.warn(`Blob not found for file ${fileId}, will create database record with new filename`);
+            // Even if blob copy fails, we still use the new filename to avoid unique constraint violations
+            // The blobUrl will be generated by the repository based on the new filename and folder
+          }
+
           const newFile = await MediaController.mediaRepository.createFile({
             folderId: targetFolderId,
-            userId: userId,
+            accountId: accountId,
             originalName: originalFile.originalName,
-            fileName: originalFile.fileName,
-            blobPath: blobCopied ? newBlobName : originalFile.blobPath, // Use original path if blob wasn't copied
-            blobUrl: blobCopied ? newBlobUrl : originalFile.blobUrl, // Use original URL if blob wasn't copied
+            fileName: newFileName,
+            blobUrl: newBlobUrl,
             fileSize: originalFile.fileSize,
             mimeType: originalFile.mimeType,
             fileType: originalFile.fileType,
-            width: originalFile.width,
-            height: originalFile.height,
-            durationSeconds: originalFile.durationSeconds,
-            thumbnailUrl: originalFile.thumbnailUrl,
-            thumbnailBlobPath: newThumbnailBlobPath || originalFile.thumbnailBlobPath,
-            hasThumbnail: !!newThumbnailBlobPath || originalFile.hasThumbnail,
+            hasThumbnail: originalFile.hasThumbnail,
             tags: originalFile.tags,
             altText: originalFile.altText,
-            description: originalFile.description,
             isPublic: originalFile.isPublic
           });
 
-          // Generate thumbnail for the copied file if it's an image and we have Sharp available
-          let finalThumbnailBlobPath = newThumbnailBlobPath;
-          if (originalFile.fileType === 'image' && sharp && blobCopied && !newThumbnailBlobPath) {
-            try {
-              console.log(`Generating thumbnail for copied file ${newFile.id}`);
-              
-              // Download the copied blob to generate thumbnail
-              const blobData = await blobStorageService.getFileBuffer(newBlobName);
-              
-              if (blobData) {
-                // Generate thumbnail using Sharp
-                const thumbnailBuffer = await sharp(blobData)
-                  .resize(300, 300, {
-                    fit: 'inside',
-                    withoutEnlargement: true
-                  })
-                  .jpeg({ quality: 80 })
-                  .toBuffer();
-
-                // Upload thumbnail
-                const thumbnailName = `${targetFolderId}/${newFile.id}_thumb`;
-                await blobStorageService.uploadFile(
-                  thumbnailBuffer,
-                  thumbnailName,
-                  'image/jpeg'
-                );
-                
-                finalThumbnailBlobPath = thumbnailName;
-                console.log(`Generated thumbnail for copied file: ${thumbnailName}`);
-              }
-            } catch (thumbnailError) {
-              console.warn(`Failed to generate thumbnail for copied file ${newFile.id}:`, thumbnailError);
-            }
-          }
-
-          // Only rename blobs if they were successfully copied
-          if (blobCopied) {
-            // Now we need to rename the blobs to use the actual database-generated ID
-            const actualBlobName = `${targetFolderId}/${newFile.id}`;
-            const actualBlobUrl = `${process.env.BLOB_BASE_URL || 'http://localhost:10000/devstoreaccount1/media'}/${actualBlobName}`;
-            
-            try {
-              // Move the blob to the correct path with the actual ID
-              await blobStorageService.moveBlob(newBlobName, actualBlobName);
-
-              // Move thumbnail if it exists (either copied or newly generated)
-              let actualThumbnailBlobPath: string | undefined;
-              if (finalThumbnailBlobPath) {
-                const actualThumbnailBlobName = `${targetFolderId}/${newFile.id}_thumb`;
-                try {
-                  await blobStorageService.moveBlob(finalThumbnailBlobPath, actualThumbnailBlobName);
-                  actualThumbnailBlobPath = actualThumbnailBlobName;
-                } catch (thumbnailMoveError) {
-                  console.warn(`Failed to rename thumbnail for file ${newFile.id}`);
-                  actualThumbnailBlobPath = finalThumbnailBlobPath; // Keep temp name
-                }
-              }
-
-              // Update the database record with the final blob paths
-              const updatedFile = await MediaController.mediaRepository.updateFile(newFile.id, {
-                blobPath: actualBlobName,
-                blobUrl: actualBlobUrl,
-                thumbnailBlobPath: actualThumbnailBlobPath,
-                hasThumbnail: !!actualThumbnailBlobPath
-              });
-
-              if (updatedFile) {
-                copiedFiles.push(updatedFile);
-              } else {
-                copiedFiles.push(newFile); // Fallback to original if update fails
-              }
-            } catch (renameError) {
-              console.warn(`Failed to rename blob for file ${newFile.id}, keeping temp name`);
-              // Update with temp thumbnail path if we generated one
-              if (finalThumbnailBlobPath && finalThumbnailBlobPath !== newThumbnailBlobPath) {
-                await MediaController.mediaRepository.updateFile(newFile.id, {
-                  thumbnailBlobPath: finalThumbnailBlobPath,
-                  hasThumbnail: true
-                });
-              }
-              copiedFiles.push(newFile);
-            }
-          } else {
-            // Blob wasn't copied, but update if we generated a thumbnail
-            if (finalThumbnailBlobPath && finalThumbnailBlobPath !== newThumbnailBlobPath) {
-              const updatedFile = await MediaController.mediaRepository.updateFile(newFile.id, {
-                thumbnailBlobPath: finalThumbnailBlobPath,
-                hasThumbnail: true
-              });
-              copiedFiles.push(updatedFile || newFile);
-            } else {
-              copiedFiles.push(newFile);
-            }
-            console.log(`Created database record for file ${newFile.id} without blob copy`);
-          }
+          copiedFiles.push(newFile);
         } catch (copyError) {
-          console.error(`Failed to copy file ${fileId}:`, copyError);
+          logger.error(`Failed to copy file ${fileId}:`, copyError);
+          skippedFiles.push({
+            fileId, 
+            originalName: originalFile.originalName, 
+            reason: 'Copy operation failed'
+          });
         }
       }
 
-      res.json({
+      const sanitizedCopiedFiles = MediaController.sanitizeMediaFiles(copiedFiles);
+      const response: any = { 
         success: true,
-        message: `Successfully copied ${copiedFiles.length} file(s)`,
-        data: copiedFiles
-      });
-
+        message: `Successfully copied ${copiedFiles.length} file(s)`, 
+        data: sanitizedCopiedFiles 
+      };
+      
+      // Include skipped files information if any
+      if (skippedFiles.length > 0) {
+        response.skipped = skippedFiles;
+        response.message += `, skipped ${skippedFiles.length} file(s)`;
+      }
+      
+      res.json(response);
     } catch (error) {
-      console.error('Failed to copy files:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to copy files',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      logger.error('Failed to copy files:', error);
+      res.status(500).json({ success: false, error: 'Failed to copy files' });
     }
   }
 
@@ -1032,107 +958,143 @@ export class MediaController {
   static async moveFiles(req: Request, res: Response): Promise<void> {
     try {
       const { fileIds, targetFolderId } = req.body;
-      const userId = (req as AuthenticatedRequest).user?.id;
+      const accountId = (req as AuthenticatedRequest).user.accountId;
 
-      if (!userId) {
-        res.status(401).json({ success: false, message: 'User not authenticated' });
+      if (!accountId) {
+        res.status(401).json({ error: 'User not authenticated' });
         return;
       }
 
       if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
-        res.status(400).json({ success: false, message: 'File IDs are required' });
+        res.status(400).json({ error: 'File IDs are required' });
         return;
       }
 
       if (!targetFolderId) {
-        res.status(400).json({ success: false, message: 'Target folder ID is required' });
+        res.status(400).json({ error: 'Target folder ID is required' });
         return;
       }
 
       // Verify target folder exists and user has access
-      const targetFolder = await MediaController.mediaRepository.getFolderById(targetFolderId, userId);
+      const targetFolder = await MediaController.mediaRepository.getFolderById(targetFolderId, accountId);
       if (!targetFolder) {
-        res.status(404).json({ success: false, message: 'Target folder not found' });
+        res.status(404).json({ error: 'Target folder not found' });
         return;
       }
 
       const movedFiles: MediaFile[] = [];
+      const skippedFiles: Array<{fileId: string, originalName: string, reason: string}> = [];
+      let originalFolderName: string | undefined;
 
       for (const fileId of fileIds) {
         // Get the original file
-        const originalFile = await MediaController.mediaRepository.getFileById(fileId, userId);
+        const originalFile = await MediaController.mediaRepository.getFileById(fileId, accountId);
         if (!originalFile) {
-          console.warn(`File ${fileId} not found, skipping`);
+          logger.warn(`File ${fileId} not found, skipping move operation`);
+          skippedFiles.push({
+            fileId, 
+            originalName: 'Unknown', 
+            reason: 'File not found'
+          });
           continue;
         }
 
         try {
-          // Use the existing blob path from the database record, not reconstructed path
-          const oldBlobName = originalFile.blobPath;
-          const newBlobName = `${targetFolderId}/${originalFile.id}`;
-
-          console.log(`Moving blob from ${oldBlobName} to ${newBlobName}`);
+          // Check if file with same originalName already exists in target folder
+          const fileExists = await MediaController.mediaRepository.checkFileExistsByOriginalName(
+            accountId, 
+            targetFolderId, 
+            originalFile.originalName
+          );
           
+          if (fileExists) {
+            logger.warn(`File '${originalFile.originalName}' already exists in target folder, skipping move operation`);
+            skippedFiles.push({
+              fileId, 
+              originalName: originalFile.originalName, 
+              reason: 'File with same name already exists in target folder'
+            });
+            continue;
+          }
+
+          if (!originalFolderName && originalFile.folderId) {
+            const originalFolder = await MediaController.mediaRepository.getFolderById(originalFile.folderId, accountId);
+            if (originalFolder) {
+              originalFolderName = originalFolder.name;
+            }
+          }
+          // Generate blob paths dynamically since they're no longer stored in the database
+          // const originalFolderName = originalFile.folderId ? await this.getFolderNameById(originalFile.folderId, accountId) : undefined;
+          // const oldBlobName = BlobPathUtils.generateFilePath(originalFile.accountId, originalFile.id, originalFile.originalName, originalFolderName);
+          
+          const targetFolderName = targetFolder.name;
+          // const newBlobName = BlobPathUtils.generateFilePath(originalFile.accountId, originalFile.id, originalFile.originalName, targetFolderName);
+
+          logger.info(`Moving blob from ${originalFile.fileName} to ${targetFolderName} for file ${fileId}`);
+
           let blobMoved = false;
           try {
-            await blobStorageService.moveBlob(oldBlobName, newBlobName);
+            const movedBlobPath = await blobStorageService.moveFile(accountId, originalFile.fileName, originalFolderName, targetFolderName);
             blobMoved = true;
-            console.log(`Successfully moved blob for file ${fileId}`);
+            logger.debug(`Successfully moved blob for file ${fileId}`);
           } catch (blobError) {
             const errorMessage = blobError instanceof Error ? blobError.message : 'Unknown error';
-            console.warn(`Blob not found for file ${fileId}, updating database record only:`, errorMessage);
+            logger.warn(`Blob not found for file ${fileId}, updating database record only:`, errorMessage);
             // Continue with database update even if blob doesn't exist
           }
 
           // Move thumbnail if it exists
-          let newThumbnailBlobPath: string | undefined;
-          if (originalFile.thumbnailBlobPath) {
-            // Use the existing thumbnail blob path from the database record
-            const oldThumbnailBlobName = originalFile.thumbnailBlobPath;
-            const newThumbnailBlobName = `${targetFolderId}/${originalFile.id}_thumb`;
-            
-            try {
-              console.log(`Moving thumbnail from ${oldThumbnailBlobName} to ${newThumbnailBlobName}`);
-              await blobStorageService.moveBlob(oldThumbnailBlobName, newThumbnailBlobName);
-              newThumbnailBlobPath = newThumbnailBlobName;
-            } catch (thumbnailError) {
+          if (originalFile.hasThumbnail) {
+            await blobStorageService.moveThumbnail(
+              originalFile.accountId,
+              originalFile.fileName,
+              originalFolderName,
+              targetFolderName
+            ).catch(thumbnailError => {
               const errorMessage = thumbnailError instanceof Error ? thumbnailError.message : 'Unknown error';
-              console.warn(`Failed to move thumbnail for file ${fileId}:`, errorMessage);
-              // If blob was moved but thumbnail wasn't, use new path; otherwise keep original
-              newThumbnailBlobPath = blobMoved ? newThumbnailBlobName : originalFile.thumbnailBlobPath;
-            }
+              logger.warn(`Failed to move thumbnail for file ${fileId}:`, errorMessage);
+            });
           }
 
-          // Update file record in database - always update paths to reflect new folder
-          const newBlobUrl = `${process.env.BLOB_BASE_URL || 'http://localhost:10000/devstoreaccount1/media'}/${newBlobName}`;
-          const updatedFile = await MediaController.mediaRepository.updateFile(fileId, {
-            folderId: targetFolderId,
-            blobPath: newBlobName, // Always use new path to match folder structure
-            blobUrl: newBlobUrl, // Always use new URL to match folder structure
-            thumbnailBlobPath: newThumbnailBlobPath || (originalFile.thumbnailBlobPath ? `${targetFolderId}/${originalFile.id}_thumb` : undefined)
+          // Update file record in database - just update the folderId
+          const updatedFile = await MediaController.mediaRepository.updateFile(fileId, accountId, {
+            folderId: targetFolderId
           });
 
           if (updatedFile) {
             movedFiles.push(updatedFile);
-            console.log(`Successfully updated database record for file ${fileId}`);
+            logger.info(`Successfully updated database record for file ${fileId}`);
           }
         } catch (moveError) {
-          console.error(`Failed to move file ${fileId}:`, moveError);
+          logger.error(`Failed to move file ${fileId}:`, moveError);
+          skippedFiles.push({
+            fileId, 
+            originalName: originalFile.originalName, 
+            reason: 'Move operation failed'
+          });
         }
       }
 
-      res.json({
+      const sanitizedMovedFiles = MediaController.sanitizeMediaFiles(movedFiles);
+      const response: any = { 
         success: true,
         message: `Successfully moved ${movedFiles.length} file(s)`,
-        data: movedFiles
-      });
+        data: sanitizedMovedFiles
+      };
+      
+      // Include skipped files information if any
+      if (skippedFiles.length > 0) {
+        response.skipped = skippedFiles;
+        response.message += `, skipped ${skippedFiles.length} file(s)`;
+      }
+      
+      res.json(response);
 
     } catch (error) {
-      console.error('Failed to move files:', error);
+      logger.error('Failed to move files:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to move files',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Failed to move files',
       });
     }
   }

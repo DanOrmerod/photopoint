@@ -1,11 +1,12 @@
 import sql from 'mssql';
+import { logger } from '../utils/logger';
 
 // Debug environment variables
-console.log('Environment check:');
-console.log('DB_SERVER:', process.env.DB_SERVER);
-console.log('DB_DATABASE:', process.env.DB_DATABASE);
-console.log('DB_USERNAME:', process.env.DB_USERNAME);
-console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***' : 'NOT SET');
+logger.debug('Environment check:');
+logger.debug('DB_SERVER:', process.env.DB_SERVER);
+logger.debug('DB_DATABASE:', process.env.DB_DATABASE);
+logger.debug('DB_USERNAME:', process.env.DB_USERNAME);
+logger.debug('DB_PASSWORD:', process.env.DB_PASSWORD ? '***' : 'NOT SET');
 
 // Validate required environment variables
 if (!process.env.DB_USERNAME || !process.env.DB_PASSWORD) {
@@ -30,7 +31,7 @@ const config: sql.config = {
   }
 };
 
-console.log('Database config:', {
+logger.debug('Database config:', {
   server: config.server,
   database: config.database,
   user: config.user,
@@ -39,31 +40,54 @@ console.log('Database config:', {
 
 // Database connection pool
 let pool: sql.ConnectionPool | null = null;
+let isConnecting = false;
 
 export async function getDbConnection(): Promise<sql.ConnectionPool> {
-  if (!pool || !pool.connected) {
-    try {
-      if (pool) {
-        await pool.close();
-      }
-      
-      console.log('Creating new database connection...');
-      pool = new sql.ConnectionPool(config);
-      
-      pool.on('error', err => {
-        console.error('Database pool error:', err);
-        pool = null;
-      });
-      
-      await pool.connect();
-      console.log('✅ Connected to SQL Server Express');
-    } catch (error) {
-      console.error('❌ Database connection failed:', error);
-      pool = null;
-      throw error;
+  if (pool && pool.connected) {
+    return pool;
+  }
+  
+  if (isConnecting) {
+    // Wait for existing connection attempt to complete
+    while (isConnecting) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    if (pool && pool.connected) {
+      return pool;
     }
   }
-  return pool;
+  
+  try {
+    isConnecting = true;
+    
+    // Only close if pool exists and is not currently connecting
+    if (pool && !pool.connecting) {
+      try {
+        await pool.close();
+      } catch (closeError) {
+        logger.warn('Warning closing existing pool:', closeError instanceof Error ? closeError.message : closeError);
+      }
+    }
+    
+    logger.info('Creating new database connection...');
+    pool = new sql.ConnectionPool(config);
+    
+    pool.on('error', err => {
+      logger.error('Database pool error:', err);
+      pool = null;
+      isConnecting = false;
+    });
+    
+    await pool.connect();
+    logger.info('✅ Connected to SQL Server Express');
+    isConnecting = false;
+    return pool;
+  } catch (error) {
+    logger.error('❌ Database connection failed:', error);
+    pool = null;
+    isConnecting = false;
+    throw error;
+  }
 }
 
 // Export connection pool for compatibility
@@ -73,14 +97,14 @@ export async function closeDbConnection(): Promise<void> {
   if (pool) {
     await pool.close();
     pool = null;
-    console.log('🔒 SQL Server connection closed');
+    logger.info('🔒 SQL Server connection closed');
   }
 }
 
 // Initialize database schema
 export async function initializeDatabase(): Promise<void> {
   try {
-    console.log('Initializing database...');
+    logger.info('Initializing database...');
     
     // Create a fresh connection for initialization
     const initPool = new sql.ConnectionPool(config);
@@ -88,7 +112,7 @@ export async function initializeDatabase(): Promise<void> {
     
     // Test the connection first
     const testResult = await initPool.request().query('SELECT 1 as test');
-    console.log('✅ Database connection test successful');
+    logger.info('✅ Database connection test successful');
     
     // Create Users table if it doesn't exist
     await initPool.request().query(`
@@ -112,14 +136,14 @@ export async function initializeDatabase(): Promise<void> {
     // Now set up the main connection pool
     pool = new sql.ConnectionPool(config);
     pool.on('error', err => {
-      console.error('Database pool error:', err);
+      logger.error('Database pool error:', err);
       pool = null;
     });
     await pool.connect();
     
-    console.log('✅ Database schema initialized');
+    logger.info('✅ Database schema initialized');
   } catch (error) {
-    console.error('❌ Database initialization failed:', error);
+    logger.error('❌ Database initialization failed:', error);
     throw error;
   }
 }

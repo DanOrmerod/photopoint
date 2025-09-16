@@ -1,4 +1,5 @@
 import { sql, getDbConnection } from './connection';
+import { logger } from '../utils/logger';
 
 export interface User {
   id: string;
@@ -26,6 +27,7 @@ export interface CreateUserData {
   fullName?: string;
   firstName?: string;
   lastName?: string;
+  accountId?: string;
 }
 
 export interface CreateOAuthUserData {
@@ -49,7 +51,7 @@ export class UserRepository {
       .input('firstName', sql.NVarChar(100), userData.firstName || null)
       .input('lastName', sql.NVarChar(100), userData.lastName || null)
       .query(`
-        INSERT INTO Users (Email, PasswordHash, Username, FullName, FirstName, LastName)
+        INSERT INTO [User] (Email, PasswordHash, Username, FullName, FirstName, LastName)
         OUTPUT INSERTED.Id, INSERTED.Email, INSERTED.PasswordHash, INSERTED.Username,
                INSERTED.FullName, INSERTED.FirstName, INSERTED.LastName, INSERTED.ProfilePicture,
                INSERTED.GoogleId, INSERTED.FacebookId, INSERTED.AppleId, INSERTED.IsActive,
@@ -61,7 +63,7 @@ export class UserRepository {
   }
 
   static async createOAuthUser(userData: CreateOAuthUserData): Promise<User> {
-    console.log('UserRepository.createOAuthUser - Input data:', {
+    logger.debug('UserRepository.createOAuthUser - Input data:', {
       email: userData.email,
       username: userData.username,
       provider: userData.provider,
@@ -73,7 +75,7 @@ export class UserRepository {
     const providerColumn = userData.provider === 'google' ? 'GoogleId' : 
                           userData.provider === 'facebook' ? 'FacebookId' : 'AppleId';
     
-    console.log('UserRepository.createOAuthUser - Provider column:', providerColumn);
+    logger.debug('UserRepository.createOAuthUser - Provider column:', providerColumn);
 
     const result = await connection.request()
       .input('email', sql.NVarChar(255), userData.email)
@@ -82,7 +84,7 @@ export class UserRepository {
       .input('profilePicture', sql.NVarChar(500), userData.profilePicture || null)
       .input('providerId', sql.NVarChar(100), userData.providerId)
       .query(`
-        INSERT INTO Users (Email, Username, FullName, ProfilePicture, ${providerColumn}, IsEmailVerified)
+        INSERT INTO [User] (Email, Username, FullName, ProfilePicture, ${providerColumn}, IsEmailVerified)
         OUTPUT INSERTED.Id, INSERTED.Email, INSERTED.PasswordHash, INSERTED.Username,
                INSERTED.FullName, INSERTED.FirstName, INSERTED.LastName, INSERTED.ProfilePicture,
                INSERTED.GoogleId, INSERTED.FacebookId, INSERTED.AppleId, INSERTED.IsActive,
@@ -90,7 +92,7 @@ export class UserRepository {
         VALUES (@email, @username, @fullName, @profilePicture, @providerId, 1)
       `);
     
-    console.log('UserRepository.createOAuthUser - User created:', result.recordset[0]?.Id);
+    logger.debug('UserRepository.createOAuthUser - User created:', result.recordset[0]?.Id);
     return result.recordset[0] as User;
   }
 
@@ -103,7 +105,7 @@ export class UserRepository {
         SELECT Id, Email, PasswordHash, Username, FullName, FirstName, LastName, 
                ProfilePicture, GoogleId, FacebookId, AppleId, IsActive, IsEmailVerified,
                LastLoginAt, CreatedAt, UpdatedAt
-        FROM Users
+        FROM [User]
         WHERE Email = @email
       `);
     
@@ -119,7 +121,7 @@ export class UserRepository {
         SELECT Id, Email, PasswordHash, Username, FullName, FirstName, LastName, 
                ProfilePicture, GoogleId, FacebookId, AppleId, IsActive, IsEmailVerified,
                LastLoginAt, CreatedAt, UpdatedAt
-        FROM Users
+        FROM [User]
         WHERE Username = @username
       `);
     
@@ -135,7 +137,7 @@ export class UserRepository {
         SELECT Id, Email, PasswordHash, Username, FullName, FirstName, LastName,
                ProfilePicture, GoogleId, FacebookId, AppleId, IsActive, IsEmailVerified,
                LastLoginAt, CreatedAt, UpdatedAt
-        FROM Users
+        FROM [User]
         WHERE Id = @id
       `);
     
@@ -165,7 +167,7 @@ export class UserRepository {
     setParts.push('UpdatedAt = GETUTCDATE()');
 
     const result = await request.query(`
-      UPDATE Users
+      UPDATE [User]
       SET ${setParts.join(', ')}
       OUTPUT INSERTED.Id, INSERTED.Email, INSERTED.PasswordHash,
              INSERTED.CreatedAt, INSERTED.UpdatedAt
@@ -180,7 +182,7 @@ export class UserRepository {
     
     const result = await connection.request()
       .input('id', sql.UniqueIdentifier, id)
-      .query(`DELETE FROM Users WHERE Id = @id`);
+      .query(`DELETE FROM [User] WHERE Id = @id`);
 
     return result.rowsAffected[0] > 0;
   }
@@ -192,7 +194,7 @@ export class UserRepository {
       SELECT Id, Email, PasswordHash, Username, FullName, FirstName, LastName,
              ProfilePicture, GoogleId, FacebookId, AppleId, IsActive, IsEmailVerified,
              LastLoginAt, CreatedAt, UpdatedAt
-      FROM Users
+      FROM [User]
       ORDER BY CreatedAt DESC
     `);
 
@@ -201,19 +203,19 @@ export class UserRepository {
 
   // OAuth-specific methods
   static async updateOAuthId(id: string, provider: 'google' | 'facebook' | 'apple', providerId: string): Promise<User | null> {
-    console.log('UserRepository.updateOAuthId - Input:', { id, provider, providerId });
+    logger.debug('UserRepository.updateOAuthId - Input:', { id, provider, providerId });
     
     const connection = await getDbConnection();
     const providerColumn = provider === 'google' ? 'GoogleId' : 
                           provider === 'facebook' ? 'FacebookId' : 'AppleId';
     
-    console.log('UserRepository.updateOAuthId - Provider column:', providerColumn);
+    logger.debug('UserRepository.updateOAuthId - Provider column:', providerColumn);
 
     const result = await connection.request()
       .input('id', sql.UniqueIdentifier, id)
       .input('providerId', sql.NVarChar(100), providerId)
       .query(`
-        UPDATE Users
+        UPDATE [User]
         SET ${providerColumn} = @providerId, UpdatedAt = GETUTCDATE()
         OUTPUT INSERTED.Id, INSERTED.Email, INSERTED.PasswordHash, INSERTED.Username,
                INSERTED.FullName, INSERTED.FirstName, INSERTED.LastName, INSERTED.ProfilePicture,
@@ -222,18 +224,18 @@ export class UserRepository {
         WHERE Id = @id
       `);
 
-    console.log('UserRepository.updateOAuthId - Updated user:', result.recordset[0]?.Id || 'None');
+    logger.debug('UserRepository.updateOAuthId - Updated user:', result.recordset[0]?.Id || 'None');
     return result.recordset[0] || null;
   }
 
   static async findByOAuthId(provider: 'google' | 'facebook' | 'apple', providerId: string): Promise<User | null> {
-    console.log('UserRepository.findByOAuthId - Searching for:', { provider, providerId });
+    logger.debug('UserRepository.findByOAuthId - Searching for:', { provider, providerId });
     
     const connection = await getDbConnection();
     const providerColumn = provider === 'google' ? 'GoogleId' : 
                           provider === 'facebook' ? 'FacebookId' : 'AppleId';
     
-    console.log('UserRepository.findByOAuthId - Provider column:', providerColumn);
+    logger.debug('UserRepository.findByOAuthId - Provider column:', providerColumn);
 
     const result = await connection.request()
       .input('providerId', sql.NVarChar(100), providerId)
@@ -241,11 +243,11 @@ export class UserRepository {
         SELECT Id, Email, PasswordHash, Username, FullName, FirstName, LastName,
                ProfilePicture, GoogleId, FacebookId, AppleId, IsActive, IsEmailVerified,
                LastLoginAt, CreatedAt, UpdatedAt
-        FROM Users
+        FROM [User]
         WHERE ${providerColumn} = @providerId
       `);
     
-    console.log('UserRepository.findByOAuthId - Found user:', result.recordset[0]?.Id || 'None');
+    logger.debug('UserRepository.findByOAuthId - Found user:', result.recordset[0]?.Id || 'None');
     return result.recordset[0] || null;
   }
 }

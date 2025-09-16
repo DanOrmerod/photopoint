@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import passport from '../config/passport';
 import jwt from 'jsonwebtoken';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
 // Helper function to generate JWT token
 const generateToken = (user: any) => {
-  console.log('generateToken - Input user:', { 
+  logger.debug('generateToken - Input user:', { 
     Id: user.Id, 
     Email: user.Email, 
     Username: user.Username,
@@ -20,7 +21,7 @@ const generateToken = (user: any) => {
   const email = user.Email || user.email;
   const username = user.Username || user.username || (email && email.split('@')[0]);
 
-  console.log('generateToken - Processed values:', { id, email, username });
+  logger.debug('generateToken - Processed values:', { id, email, username });
 
   return jwt.sign(
     { 
@@ -44,15 +45,15 @@ router.get('/google/callback',
   passport.authenticate('google', { session: false }),
   (req, res) => {
     try {
-      console.log('Google OAuth callback - req.user:', req.user);
+      logger.debug('Google OAuth callback - req.user:', req.user);
       
       const user = req.user as any;
       if (!user) {
-        console.error('Google OAuth callback - No user found in req.user');
+        logger.error('Google OAuth callback - No user found in req.user');
         return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:4200'}/login?error=auth_failed`);
       }
 
-      console.log('Google OAuth callback - User found:', { 
+      logger.debug('Google OAuth callback - User found:', { 
         Id: user.Id, 
         Email: user.Email, 
         Username: user.Username,
@@ -62,14 +63,14 @@ router.get('/google/callback',
       });
       
       const token = generateToken(user);
-      console.log('Google OAuth callback - Token generated successfully');
+      logger.debug('Google OAuth callback - Token generated successfully');
       
       // Redirect to frontend with token
       const redirectUrl = `${process.env.CLIENT_URL || 'http://localhost:4200'}/auth/callback?token=${token}&provider=google`;
-      console.log('Google OAuth callback - Redirecting to:', redirectUrl);
+      logger.debug('Google OAuth callback - Redirecting to:', redirectUrl);
       res.redirect(redirectUrl);
     } catch (error) {
-      console.error('Google OAuth callback error:', error);
+      logger.error('Google OAuth callback error:', error);
       res.redirect(`${process.env.CLIENT_URL || 'http://localhost:4200'}/login?error=server_error`);
     }
   }
@@ -94,7 +95,7 @@ router.get('/facebook/callback',
       // Redirect to frontend with token
       res.redirect(`${process.env.CLIENT_URL || 'http://localhost:4200'}/auth/callback?token=${token}&provider=facebook`);
     } catch (error) {
-      console.error('Facebook OAuth callback error:', error);
+      logger.error('Facebook OAuth callback error:', error);
       res.redirect(`${process.env.CLIENT_URL || 'http://localhost:4200'}/login?error=server_error`);
     }
   }

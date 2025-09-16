@@ -1,9 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { RouterTestingModule } from '@angular/router/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { Router } from '@angular/router';
+import { Component } from '@angular/core';
 import { AccountComponent } from './account.component';
 import { AuthService } from '../auth/auth.service';
 import { OAuthService } from '../services/oauth.service';
+
+// Dummy component for routing
+@Component({ template: '' })
+class DummyComponent { }
 
 describe('AccountComponent', () => {
   let component: AccountComponent;
@@ -18,11 +25,16 @@ describe('AccountComponent', () => {
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     await TestBed.configureTestingModule({
-      imports: [AccountComponent, RouterTestingModule],
+      imports: [AccountComponent],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([
+          { path: '', component: DummyComponent },
+          { path: 'login', component: DummyComponent }
+        ]),
         { provide: AuthService, useValue: authServiceSpy },
-        { provide: OAuthService, useValue: oauthServiceSpy },
-        { provide: Router, useValue: routerSpy }
+        { provide: OAuthService, useValue: oauthServiceSpy }
       ]
     }).compileComponents();
 
@@ -31,6 +43,7 @@ describe('AccountComponent', () => {
     mockAuthService = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
     mockOAuthService = TestBed.inject(OAuthService) as jasmine.SpyObj<OAuthService>;
     mockRouter = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+    spyOn(mockRouter, 'navigate');
     fixture.detectChanges();
   });
 

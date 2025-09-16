@@ -1,6 +1,7 @@
 import { Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { PhotoService, UploadResponse } from '../services/photo.service';
 
 export interface PhotoUpload {
@@ -174,16 +175,25 @@ export class UploadComponent {
    */
   private async uploadSinglePhoto(photo: PhotoUpload): Promise<void> {
     try {
-      const response = await this.photoService.uploadPhoto(photo.file).toPromise();
+      const response = await firstValueFrom(this.photoService.uploadPhoto(photo.file));
       
-      if (response?.success) {
+      // New API format: returns direct file object or { error: 'message' }
+      if (response?.error) {
+        this.updatePhotoStatus(photo.id, 'error', 0, response.error);
+      } else if (response?.id) {
+        // Success - response contains file object
         this.updatePhotoStatus(photo.id, 'success', 100);
       } else {
-        this.updatePhotoStatus(photo.id, 'error', 0, response?.error || 'Upload failed');
+        this.updatePhotoStatus(photo.id, 'error', 0, 'Upload failed - invalid response');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      this.updatePhotoStatus(photo.id, 'error', 0, 'Network error occurred');
+      // Handle HTTP error with new format
+      if (error.error?.error) {
+        this.updatePhotoStatus(photo.id, 'error', 0, error.error.error);
+      } else {
+        this.updatePhotoStatus(photo.id, 'error', 0, 'Network error occurred');
+      }
     }
   }
 

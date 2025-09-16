@@ -92,6 +92,7 @@ Thumbs.db
 # Azure storage directories
 __blobstorage__/
 __queuestorage__/
+__azurite*
 
 # Docker
 Dockerfile.tmp

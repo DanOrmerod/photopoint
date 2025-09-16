@@ -6,6 +6,7 @@ import { TemplateService, Template } from '../../services/template.service';
 import { TemplateSelectorComponent } from '../template-selector/template-selector.component';
 import { Website, Page } from '../../services/website.service';
 import { environment } from '../../../environments/environment';
+import { ApiErrorHandler } from '../../utils/api-error-handler';
 
 @Component({
   selector: 'app-website-dashboard',
@@ -62,7 +63,7 @@ export class WebsiteDashboardComponent implements OnInit {
       }
     } catch (error) {
       console.error('Failed to load website:', error);
-      this.error.set('Failed to load website. Please try again.');
+      this.error.set(ApiErrorHandler.getErrorMessage(error));
     } finally {
       this.loading.set(false);
     }

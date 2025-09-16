@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { MediaController } from '../controllers/MediaController';
+import { CleanupController } from '../controllers/CleanupController';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
@@ -32,5 +33,9 @@ router.delete('/files/:fileId', MediaController.deleteFile);
 // File operations
 router.post('/files/copy', MediaController.copyFiles);
 router.post('/files/move', MediaController.moveFiles);
+
+// Cleanup operations (admin)
+router.get('/cleanup/stats', CleanupController.getCleanupStats);
+router.post('/cleanup/run', CleanupController.cleanupDeletedFiles);
 
 export default router;

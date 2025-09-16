@@ -6,23 +6,15 @@
 export interface MediaFile {
   id: string;
   folderId?: string;
-  userId: string;
+  accountId: string;
   originalName: string;
   fileName: string;
-  blobPath: string;
-  blobUrl: string;
   fileSize: number;
   mimeType: string;
   fileType: 'image' | 'video';
-  width?: number;
-  height?: number;
-  durationSeconds?: number;
-  thumbnailUrl?: string;
-  thumbnailBlobPath?: string;
   hasThumbnail?: boolean;
   tags?: string[];
   altText?: string;
-  description?: string;
   isPublic: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -32,7 +24,7 @@ export interface MediaFolder {
   id: string;
   name: string;
   parentId?: string;
-  userId: string;
+  accountId: string;
   allowWebsiteUsage: boolean;
   websiteUsagePermissions: 'private' | 'all_websites' | 'specific_websites';
   description?: string;
@@ -70,13 +62,13 @@ export function mediaFileToPhoto(mediaFile: MediaFile): Photo {
     originalName: mediaFile.originalName,
     mimeType: mediaFile.mimeType,
     size: mediaFile.fileSize,
-    url: mediaFile.blobUrl,
-    thumbnailUrl: mediaFile.thumbnailUrl,
+    url: '', // No longer available on frontend - use API endpoints for file access
+    thumbnailUrl: '', // No longer stored in MediaFile - generated dynamically
     uploadedAt: mediaFile.createdAt,
-    userId: mediaFile.userId,
+    userId: mediaFile.accountId, // Map accountId to userId for backward compatibility
     metadata: {
-      width: mediaFile.width,
-      height: mediaFile.height,
+      width: 0, // No longer stored in MediaFile
+      height: 0, // No longer stored in MediaFile
       tags: mediaFile.tags
     }
   };
@@ -90,12 +82,8 @@ export function photoToMediaFile(photo: Photo): Partial<MediaFile> {
     originalName: photo.originalName,
     mimeType: photo.mimeType,
     fileSize: photo.size,
-    blobUrl: photo.url,
-    thumbnailUrl: photo.thumbnailUrl,
     createdAt: photo.uploadedAt,
-    userId: photo.userId,
-    width: photo.metadata?.width,
-    height: photo.metadata?.height,
+    accountId: photo.userId, // Map userId to accountId
     tags: photo.metadata?.tags,
     fileType: photo.mimeType.startsWith('image/') ? 'image' : 'video'
   };

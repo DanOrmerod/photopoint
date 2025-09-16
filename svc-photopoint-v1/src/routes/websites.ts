@@ -2,6 +2,7 @@ import express from 'express';
 import { WebsiteController } from '../controllers/WebsiteController';
 import { PageController } from '../controllers/PageController';
 import { authenticateToken } from '../middleware/auth';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
@@ -11,9 +12,9 @@ const pageController = new PageController();
 
 // Test endpoint without authentication to verify logging
 router.get('/test', (req, res) => {
-  console.log('TEST ENDPOINT: Request received');
-  console.log('TEST ENDPOINT: Headers:', req.headers);
-  console.log('TEST ENDPOINT: Query params:', req.query);
+  logger.debug('TEST ENDPOINT: Request received');
+  logger.debug('TEST ENDPOINT: Headers:', req.headers);
+  logger.debug('TEST ENDPOINT: Query params:', req.query);
   res.json({ message: 'Test endpoint working', timestamp: new Date() });
 });
 

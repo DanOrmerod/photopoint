@@ -7,7 +7,9 @@ yarn-error.log*
 # Production builds
 dist/
 build/
-
+#Azurite
+uploads/
+__azurite*
 # Environment variables
 .env
 .env.local
