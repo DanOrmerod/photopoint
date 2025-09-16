@@ -1,0 +1,22 @@
+.edit-container {
+  padding: 2rem;
+  text-align: center;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid var(--primary-color);
+  background: transparent;
+  color: var(--primary-color);
+  border-radius: 8px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+
+  &:hover {
+    background: var(--primary-color);
+    color: white;
+  }
+}

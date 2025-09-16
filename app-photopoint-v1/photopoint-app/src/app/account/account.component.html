@@ -1,0 +1,17 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1>Account Settings</h1>
+    <p>Manage your account settings and security preferences</p>
+  </div>
+  
+  <div class="content-card">
+    <h2>Account Management</h2>
+    <p>Clear cached authentication tokens and logout.</p>
+    
+    <div class="button-group">
+      <button (click)="clearCache()" class="btn btn-warning">Clear Token Cache</button>
+      <button (click)="logout()" class="btn btn-danger">Logout & Clear All</button>
+      <a routerLink="/" class="btn btn-primary">Back to Gallery</a>
+    </div>
+  </div>
+</div>

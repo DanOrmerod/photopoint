@@ -1,0 +1,521 @@
+<div class="image-block" [ngStyle]="data.styles">
+  @if (isEditing) {
+    <!-- Enhanced Image Editor for FR-CMS-018 -->
+    <div class="enhanced-image-editor" (click)="$event.stopPropagation()">
+      
+      <!-- Navigation Tabs -->
+      <div class="editor-tabs">
+        <button 
+          class="tab-button" 
+          [class.active]="!showStylingPanel && !showTextOverlayEditor"
+          (click)="showStylingPanel = false; showTextOverlayEditor = false"
+        >
+          Basic Settings
+        </button>
+        <button 
+          class="tab-button" 
+          [class.active]="showStylingPanel"
+          (click)="showStylingPanel = true; showTextOverlayEditor = false"
+        >
+          Styling & Effects
+        </button>
+        <button 
+          class="tab-button" 
+          [class.active]="showTextOverlayEditor"
+          (click)="showTextOverlayEditor = true; showStylingPanel = false"
+        >
+          Text Overlays
+        </button>
+      </div>
+
+      <!-- Basic Settings Tab -->
+      @if (!showStylingPanel && !showTextOverlayEditor) {
+        <div class="basic-settings-panel">
+          <!-- Image Source Options -->
+          <div class="source-options">
+            <div class="button-group">
+              <button class="btn btn-outline" (click)="openMediaLibrary()">
+                <i class="fas fa-folder"></i> Media Library
+              </button>
+              <label class="btn btn-outline">
+                <i class="fas fa-upload"></i> Upload Image
+                <input type="file" accept="image/*" (change)="onFileSelected($event)" style="display: none;">
+              </label>
+            </div>
+          </div>
+
+          <!-- Manual URL Input -->
+          <div class="editor-group">
+            <label>Image URL:</label>
+            <input 
+              type="url" 
+              class="form-control"
+              [value]="getContent().src || ''"
+              (input)="updateSrc($event)"
+              placeholder="Enter image URL"
+            />
+          </div>
+          
+          <!-- Basic Properties -->
+          <div class="editor-row">
+            <div class="editor-group">
+              <label>Alt Text:</label>
+              <input 
+                type="text" 
+                class="form-control"
+                [value]="getContent().alt || ''"
+                (input)="updateAlt($event)"
+                placeholder="Accessibility description"
+              />
+            </div>
+          </div>
+
+          <!-- Aspect Ratio Controls -->
+          <div class="editor-group">
+            <label>Aspect Ratio:</label>
+            <select 
+              class="form-control"
+              [value]="getContent().aspectRatio || 'original'"
+              (change)="updateAspectRatio($event)"
+            >
+              <option value="original">Original</option>
+              <option value="16:9">16:9 (Widescreen)</option>
+              <option value="4:3">4:3 (Standard)</option>
+              <option value="1:1">1:1 (Square)</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+
+          @if (getContent().aspectRatio === 'custom') {
+            <div class="editor-group">
+              <label>Custom Aspect Ratio:</label>
+              <input 
+                type="text" 
+                class="form-control"
+                [value]="getContent().customAspectRatio || ''"
+                (input)="updateCustomAspectRatio($event)"
+                placeholder="e.g., 3:2, 5:4"
+              />
+            </div>
+          }
+
+          <!-- Size Controls -->
+          <div class="editor-row">
+            <div class="editor-group">
+              <label>Width:</label>
+              <input 
+                type="text" 
+                class="form-control"
+                [value]="getContent().width || ''"
+                (input)="updateWidth($event)"
+                placeholder="e.g., 100%, 300px"
+              />
+            </div>
+            
+            <div class="editor-group">
+              <label>Height:</label>
+              <input 
+                type="text" 
+                class="form-control"
+                [value]="getContent().height || ''"
+                (input)="updateHeight($event)"
+                placeholder="e.g., auto, 200px"
+              />
+            </div>
+          </div>
+          
+          <!-- Alignment -->
+          <div class="editor-group">
+            <label>Alignment:</label>
+            <select 
+              class="form-control"
+              [value]="getContent().alignment || 'center'"
+              (change)="updateAlignment($event)"
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+          
+          <!-- Caption -->
+          <div class="editor-group">
+            <label>Caption:</label>
+            <input 
+              type="text" 
+              class="form-control"
+              [value]="getContent().caption || ''"
+              (input)="updateCaption($event)"
+              placeholder="Optional image caption"
+            />
+          </div>
+        </div>
+      }
+
+      <!-- Styling & Effects Tab -->
+      @if (showStylingPanel) {
+        <div class="styling-panel">
+          <!-- Border Controls -->
+          <div class="style-section">
+            <h4>Borders</h4>
+            <div class="editor-row">
+              <div class="editor-group">
+                <label>Width:</label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  [value]="getContent().borders?.width || ''"
+                  (input)="updateBorderWidth($event)"
+                  placeholder="e.g., 1px, 2rem"
+                />
+              </div>
+              <div class="editor-group">
+                <label>Style:</label>
+                <select 
+                  class="form-control"
+                  [value]="getContent().borders?.style || 'solid'"
+                  (change)="updateBorderStyle($event)"
+                >
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                  <option value="double">Double</option>
+                </select>
+              </div>
+            </div>
+            <div class="editor-row">
+              <div class="editor-group">
+                <label>Color:</label>
+                <input 
+                  type="color" 
+                  class="form-control color-input"
+                  [value]="getContent().borders?.color || '#000000'"
+                  (input)="updateBorderColor($event)"
+                />
+              </div>
+              <div class="editor-group">
+                <label>Radius:</label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  [value]="getContent().borders?.radius || ''"
+                  (input)="updateBorderRadius($event)"
+                  placeholder="e.g., 8px, 50%"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Shadow Controls -->
+          <div class="style-section">
+            <h4>Shadows</h4>
+            <div class="editor-row">
+              <div class="editor-group">
+                <label>Offset X:</label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  [value]="getContent().shadows?.offsetX || ''"
+                  (input)="updateShadowOffsetX($event)"
+                  placeholder="e.g., 2px"
+                />
+              </div>
+              <div class="editor-group">
+                <label>Offset Y:</label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  [value]="getContent().shadows?.offsetY || ''"
+                  (input)="updateShadowOffsetY($event)"
+                  placeholder="e.g., 4px"
+                />
+              </div>
+            </div>
+            <div class="editor-row">
+              <div class="editor-group">
+                <label>Blur:</label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  [value]="getContent().shadows?.blur || ''"
+                  (input)="updateShadowBlur($event)"
+                  placeholder="e.g., 8px"
+                />
+              </div>
+              <div class="editor-group">
+                <label>Color:</label>
+                <input 
+                  type="color" 
+                  class="form-control color-input"
+                  [value]="getContent().shadows?.color || '#000000'"
+                  (input)="updateShadowColor($event)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Overlay Controls -->
+          <div class="style-section">
+            <h4>Color Overlay</h4>
+            <div class="editor-row">
+              <div class="editor-group">
+                <label>Color:</label>
+                <input 
+                  type="color" 
+                  class="form-control color-input"
+                  [value]="getContent().overlay?.color || '#000000'"
+                  (input)="updateOverlayColor($event)"
+                />
+              </div>
+              <div class="editor-group">
+                <label>Opacity:</label>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="1" 
+                  step="0.1"
+                  class="form-control"
+                  [value]="getContent().overlay?.opacity || 0"
+                  (input)="updateOverlayOpacity($event)"
+                />
+                <span class="opacity-value">{{ (getContent().overlay?.opacity || 0) * 100 }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Text Overlays Tab -->
+      @if (showTextOverlayEditor) {
+        <div class="text-overlay-panel">
+          <div class="panel-header">
+            <h4>Text Overlays</h4>
+            <button class="btn btn-primary" (click)="addTextOverlay()">
+              <i class="fas fa-plus"></i> Add Text
+            </button>
+          </div>
+
+          @for (overlay of getContent().textOverlays; track $index; let i = $index) {
+            <div class="text-overlay-item">
+              <div class="overlay-header">
+                <span>Text Overlay {{ i + 1 }}</span>
+                <button class="btn btn-sm btn-danger" (click)="removeTextOverlay(i)">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              
+              <div class="editor-group">
+                <label>Text:</label>
+                <input 
+                  type="text" 
+                  class="form-control"
+                  [value]="overlay.text"
+                  (input)="updateTextOverlayText(i, $event)"
+                />
+              </div>
+
+              <div class="editor-row">
+                <div class="editor-group">
+                  <label>Font Size:</label>
+                  <input 
+                    type="text" 
+                    class="form-control"
+                    [value]="overlay.fontSize"
+                    (input)="updateTextOverlayFontSize(i, $event)"
+                    placeholder="e.g., 16px, 1.2rem"
+                  />
+                </div>
+                <div class="editor-group">
+                  <label>Font Family:</label>
+                  <select 
+                    class="form-control"
+                    [value]="overlay.fontFamily"
+                    (change)="updateTextOverlayFontFamily(i, $event)"
+                  >
+                    <option value="Arial, sans-serif">Arial</option>
+                    <option value="Georgia, serif">Georgia</option>
+                    <option value="'Times New Roman', serif">Times New Roman</option>
+                    <option value="'Courier New', monospace">Courier New</option>
+                    <option value="Helvetica, sans-serif">Helvetica</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="editor-row">
+                <div class="editor-group">
+                  <label>Text Color:</label>
+                  <input 
+                    type="color" 
+                    class="form-control color-input"
+                    [value]="overlay.color"
+                    (input)="updateTextOverlayColor(i, $event)"
+                  />
+                </div>
+                <div class="editor-group">
+                  <label>Background:</label>
+                  <input 
+                    type="color" 
+                    class="form-control color-input"
+                    [value]="overlay.backgroundColor"
+                    (input)="updateTextOverlayBackgroundColor(i, $event)"
+                  />
+                </div>
+              </div>
+
+              <div class="editor-row">
+                <div class="editor-group">
+                  <label>Position X (%):</label>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="100"
+                    class="form-control"
+                    [value]="overlay.position.x"
+                    (input)="updateTextOverlayPositionX(i, $event)"
+                  />
+                </div>
+                <div class="editor-group">
+                  <label>Position Y (%):</label>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="100"
+                    class="form-control"
+                    [value]="overlay.position.y"
+                    (input)="updateTextOverlayPositionY(i, $event)"
+                  />
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Editor Actions -->
+      <div class="editor-actions">
+        <button class="btn btn-secondary" (click)="finishEditing()">Cancel</button>
+        <button class="btn btn-primary" (click)="finishEditing()">Apply Changes</button>
+      </div>
+    </div>
+
+    <!-- Media Library Modal -->
+    @if (showMediaLibrary) {
+      <div class="media-library-modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Select Image from Library</h3>
+            <button class="btn btn-sm" (click)="showMediaLibrary = false">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <!-- Folder Selection -->
+            <div class="folder-selector">
+              <label>Select Folder:</label>
+              <select 
+                class="form-control"
+                [value]="selectedFolderId || ''"
+                (change)="onFolderChange($event)"
+              >
+                <option value="">All Images</option>
+                @for (folder of availableFolders; track folder.id) {
+                  <option [value]="folder.id">
+                    {{ folder.name }} ({{ folder.fileCount }} images)
+                    @if (!folder.allowWebsiteUsage) {
+                      <span class="private-indicator">🔒</span>
+                    }
+                  </option>
+                }
+              </select>
+            </div>
+
+            <!-- Photo Grid -->
+            <div class="photo-grid">
+              @for (photo of availablePhotos; track photo.id) {
+                <div 
+                  class="photo-item"
+                  (click)="selectImageFromLibrary(photo)"
+                >
+                  <img 
+                    [src]="photo.thumbnailUrl || photo.url" 
+                    [alt]="photo.originalName"
+                    class="photo-thumbnail"
+                  />
+                  <div class="photo-info">
+                    <span class="photo-name">{{ photo.originalName }}</span>
+                    <span class="photo-size">{{ (photo.size / 1024).toFixed(1) }}KB</span>
+                  </div>
+                </div>
+              } @empty {
+                <div class="no-photos">
+                  <i class="fas fa-images"></i>
+                  <p>No images found in this folder</p>
+                  @if (selectedFolderId) {
+                    <small>Try selecting a different folder or upload new images</small>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+  } @else {
+    <!-- Enhanced Image Display -->
+    <div 
+      class="image-content" 
+      [style.text-align]="getContent().alignment || 'center'"
+      (dblclick)="startEditing()"
+    >
+      @if (imageUrl()) {
+        <div class="image-container" [style.position]="'relative'">
+          <!-- Color Overlay -->
+          @if (getContent().overlay && (getContent().overlay?.opacity || 0) > 0) {
+            <div class="color-overlay" [ngStyle]="getOverlayStyles()"></div>
+          }
+          
+          <!-- Main Image -->
+          <img 
+            [src]="imageUrl()" 
+            [alt]="getContent().alt || 'Image'"
+            [ngStyle]="getImageStyles()"
+            class="block-image"
+            [loading]="getContent().lazyLoading ? 'lazy' : 'eager'"
+            [decoding]="'async'"
+          />
+          
+          <!-- Text Overlays -->
+          @for (overlay of getContent().textOverlays; track $index) {
+            <div 
+              class="text-overlay"
+              [style.position]="'absolute'"
+              [style.left.%]="overlay.position.x"
+              [style.top.%]="overlay.position.y"
+              [style.color]="overlay.color"
+              [style.backgroundColor]="overlay.backgroundColor"
+              [style.fontSize]="overlay.fontSize"
+              [style.fontFamily]="overlay.fontFamily"
+              [style.opacity]="overlay.opacity"
+              [style.padding]="'4px 8px'"
+              [style.borderRadius]="'4px'"
+              [style.transform]="'translate(-50%, -50%)'"
+            >
+              {{ overlay.text }}
+            </div>
+          }
+        </div>
+        
+        @if (getContent().caption) {
+          <p class="image-caption">{{ getContent().caption }}</p>
+        }
+      } @else {
+        <div class="image-placeholder" (click)="startEditing()">
+          <i class="fas fa-image"></i>
+          <p>Click to add an image</p>
+          <small>Double-click for advanced options</small>
+        </div>
+      }
+    </div>
+  }
+</div>

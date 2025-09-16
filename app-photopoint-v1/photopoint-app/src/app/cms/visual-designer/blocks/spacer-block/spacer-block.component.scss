@@ -1,0 +1,105 @@
+.spacer-block {
+  position: relative;
+  cursor: pointer;
+}
+
+.spacer-content {
+  position: relative;
+  background: linear-gradient(45deg, #f3f4f6 25%, transparent 25%), 
+              linear-gradient(-45deg, #f3f4f6 25%, transparent 25%), 
+              linear-gradient(45deg, transparent 75%, #f3f4f6 75%), 
+              linear-gradient(-45deg, transparent 75%, #f3f4f6 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+  border: 1px dashed #d1d5db;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.spacer-content:hover {
+  border-color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.spacer-indicator {
+  background: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  font-family: monospace;
+}
+
+.inline-spacer-editor {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  border: 2px solid #3b82f6;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spacer-editor-content {
+  width: 100%;
+  max-width: 300px;
+}
+
+.editor-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.editor-group label {
+  font-weight: 500;
+  font-size: 14px;
+  color: #374151;
+}
+
+.form-control {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: monospace;
+}
+
+.form-control:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}

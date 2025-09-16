@@ -1,0 +1,99 @@
+<div class="template-selector-overlay">
+  <div class="template-selector-modal">
+    <!-- Header -->
+    <div class="template-selector-header">
+      <h2>Choose a Template</h2>
+      <button class="close-btn" (click)="onClose()" aria-label="Close template selector">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="template-selector-controls">
+      <div class="search-box">
+        <i class="fas fa-search"></i>
+        <input
+          type="text"
+          placeholder="Search templates..."
+          (input)="onSearchChange($event)"
+          class="search-input"
+        />
+      </div>
+
+      <div class="category-filter">
+        <button
+          *ngFor="let category of categories()"
+          [class.active]="selectedCategory() === category"
+          (click)="onCategoryChange(category)"
+          class="category-btn"
+        >
+          {{ getCategoryDisplayName(category) }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Templates Grid -->
+    <div class="templates-grid">
+      <div
+        *ngFor="let template of filteredTemplates()"
+        class="template-card"
+        (click)="selectTemplate(template)"
+      >
+        <!-- Template Preview -->
+        <div class="template-preview" [innerHTML]="getTemplatePreview(template)"></div>
+
+        <!-- Template Info -->
+        <div class="template-info">
+          <div class="template-header">
+            <h3 class="template-name">{{ template.name }}</h3>
+            <span class="template-category">{{ getCategoryDisplayName(template.category) }}</span>
+          </div>
+          <p class="template-description">{{ template.description }}</p>
+          
+          <!-- Features -->
+          <div class="template-features">
+            <span
+              *ngFor="let feature of template.features.slice(0, 3)"
+              class="feature-tag"
+            >
+              {{ feature }}
+            </span>
+            <span
+              *ngIf="template.features.length > 3"
+              class="feature-count"
+            >
+              +{{ template.features.length - 3 }} more
+            </span>
+          </div>
+
+          <!-- Pages Count -->
+          <div class="template-pages">
+            <i class="fas fa-file-alt"></i>
+            <span>{{ template.pages.length }} page{{ template.pages.length !== 1 ? 's' : '' }}</span>
+          </div>
+
+          <!-- Select Button -->
+          <button class="select-template-btn">
+            <i class="fas fa-check"></i>
+            Use This Template
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="filteredTemplates().length === 0" class="empty-state">
+      <i class="fas fa-search"></i>
+      <h3>No templates found</h3>
+      <p>Try adjusting your search or category filter</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="template-selector-footer">
+      <p class="help-text">
+        <i class="fas fa-info-circle"></i>
+        You can customize colors, fonts, and content after selecting a template
+      </p>
+    </div>
+  </div>
+</div>

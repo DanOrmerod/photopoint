@@ -7,67 +7,8 @@ import { AuthService } from '../auth/auth.service';
   selector: 'app-oauth-callback',
   standalone: true,
   imports: [],
-  template: `
-    <div class="oauth-callback">
-      <div class="loading-container">
-        <div class="loading-spinner"></div>
-        <h2>{{ message }}</h2>
-        <p>{{ subMessage }}</p>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .oauth-callback {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-
-    .loading-container {
-      text-align: center;
-      background: white;
-      padding: 3rem;
-      border-radius: 12px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-      max-width: 400px;
-    }
-
-    .loading-spinner {
-      width: 50px;
-      height: 50px;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #667eea;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 1rem auto;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    h2 {
-      color: #333;
-      margin-bottom: 0.5rem;
-      font-size: 1.5rem;
-    }
-
-    p {
-      color: #666;
-      margin: 0;
-    }
-
-    .error {
-      color: #e74c3c;
-    }
-
-    .success {
-      color: #27ae60;
-    }
-  `]
+  templateUrl: './oauth-callback.component.html',
+  styleUrls: ['./oauth-callback.component.scss']
 })
 export class OAuthCallbackComponent implements OnInit {
   message = 'Processing authentication...';

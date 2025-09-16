@@ -7,7 +7,9 @@ yarn-error.log*
 # Production builds
 dist/
 build/
-
+#Azurite
+uploads/
+__azurite*
 # Environment variables
 .env
 .env.local
@@ -111,3 +113,7 @@ public
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Azure storage directories
+__blobstorage__/
+__queuestorage__/

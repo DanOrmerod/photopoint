@@ -1,0 +1,122 @@
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { getDbConnection } from '../database/connection';
+import sql from 'mssql';
+import { logger } from '../utils/logger';
+
+// Extend Express Request interface to include user
+declare global {
+  namespace Express {
+    interface User {
+      id: string;
+      email: string;
+      username?: string;
+      fullName?: string;
+      profilePicture?: string;
+      accountId?: string;
+    }
+  }
+}
+
+export interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    email: string;
+    username?: string;
+    fullName?: string;
+    profilePicture?: string;
+    accountId: string;
+  };
+}
+
+// JWT Authentication middleware
+export const authenticateToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) {
+      res.status(401).json({ error: 'Access token required' });
+      return;
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'devsecret') as any;
+    
+    // Fetch user from database to ensure they still exist and are active
+    const connection = await getDbConnection();
+    const result = await connection.request()
+      .input('userId', sql.UniqueIdentifier, decoded.id)
+      .query(`
+        SELECT u.Id, u.Email, u.Username, u.FullName, u.ProfilePicture, u.IsActive, ua.AccountId
+        FROM [User] u
+        INNER JOIN UserAccount ua ON u.Id = ua.UserId
+        WHERE u.Id = @userId AND u.IsActive = 1
+      `);
+
+    if (result.recordset.length === 0) {
+      res.status(401).json({ error: 'User not found or inactive' });
+      return;
+    }
+
+    const user = result.recordset[0];
+    req.user = {
+      id: user.Id,
+      email: user.Email,
+      username: user.Username,
+      fullName: user.FullName,
+      profilePicture: user.ProfilePicture,
+      accountId: user.AccountId
+    };
+
+    next();
+  } catch (error) {
+    logger.error('Authentication error:', error);
+    if (error instanceof jwt.JsonWebTokenError) {
+      res.status(401).json({ error: 'Invalid token' });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+};
+
+// Optional authentication middleware - doesn't fail if no token
+export const optionalAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      next();
+      return;
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'devsecret') as any;
+    
+    const connection = await getDbConnection();
+    const result = await connection.request()
+      .input('userId', sql.UniqueIdentifier, decoded.id) // Changed from decoded.userId to decoded.id
+      .query(`
+        SELECT u.Id, u.Email, u.Username, u.FullName, u.ProfilePicture, u.IsActive, ua.AccountId
+        FROM [User] u
+        INNER JOIN UserAccount ua ON u.Id = ua.UserId
+        WHERE u.Id = @userId AND u.IsActive = 1
+      `);
+
+    if (result.recordset.length > 0) {
+      const user = result.recordset[0];
+      req.user = {
+        id: user.Id,
+        email: user.Email,
+        username: user.Username,
+        fullName: user.FullName,
+        profilePicture: user.ProfilePicture,
+        accountId: user.AccountId
+      };
+    }
+
+    next();
+  } catch (error) {
+    // Don't fail on auth errors in optional auth
+    next();
+  }
+};

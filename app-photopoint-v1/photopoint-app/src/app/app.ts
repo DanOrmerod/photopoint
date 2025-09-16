@@ -1,24 +1,33 @@
-import { Component, signal, HostListener } from '@angular/core';
+import { Component, signal, HostListener, OnInit } from '@angular/core';
 import { RouterOutlet, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from './auth/auth.service';
 import { OAuthService } from './services/oauth.service';
+import { ThemeService } from './services/theme.service';
+import { NotificationComponent } from './components/notification.component';
+import { ConfirmationDialogComponent } from './components/confirmation-dialog.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, CommonModule],
+  imports: [RouterOutlet, RouterLink, CommonModule, NotificationComponent, ConfirmationDialogComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
-export class App {
+export class App implements OnInit {
   protected readonly title = signal('PhotoPoint');
   public isProfileMenuOpen = signal(false);
   public imageLoadFailed = signal(false);
 
   constructor(
     public authService: AuthService,
-    private oauthService: OAuthService
+    private oauthService: OAuthService,
+    private themeService: ThemeService
   ) {}
+
+  ngOnInit(): void {
+    // Clear any theme styles that might affect the CMS interface
+    this.themeService.clearDocumentTheme();
+  }
 
   logout(): void {
     this.authService.clearAllTokens();

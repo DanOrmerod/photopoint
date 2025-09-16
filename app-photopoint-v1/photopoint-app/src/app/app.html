@@ -9,6 +9,7 @@
         <!-- Authenticated Navigation -->
         <nav class="nav">
           <a routerLink="/" class="nav-link">Gallery</a>
+          <a routerLink="/websites" class="nav-link">Websites</a>
           <a routerLink="/upload" class="nav-link">Upload</a>
           <a routerLink="/favorites" class="nav-link">Favorites</a>
         </nav>
@@ -65,3 +66,7 @@
     <router-outlet></router-outlet>
   </main>
 </div>
+
+<!-- Global Components -->
+<app-notification></app-notification>
+<app-confirmation-dialog></app-confirmation-dialog>

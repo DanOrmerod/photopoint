@@ -1,0 +1,77 @@
+<div class="hero-block" [ngStyle]="getHeroStyles()">
+  @if (isEditing) {
+    <!-- Hero Editor -->
+    <div class="inline-hero-editor" (click)="$event.stopPropagation()">
+      <div class="hero-editor-grid">
+        <div class="editor-group">
+          <label>Title:</label>
+          <input 
+            type="text" 
+            class="form-control"
+            [value]="getContent().title || ''"
+            (input)="updateTitle($event)"
+            placeholder="Enter hero title"
+          />
+        </div>
+        
+        <div class="editor-group">
+          <label>Subtitle:</label>
+          <textarea 
+            class="form-control"
+            [value]="getContent().subtitle || ''"
+            (input)="updateSubtitle($event)"
+            placeholder="Enter hero subtitle"
+            rows="3"
+          ></textarea>
+        </div>
+        
+        <div class="editor-group">
+          <label>Button Text:</label>
+          <input 
+            type="text" 
+            class="form-control"
+            [value]="getContent().buttonText || ''"
+            (input)="updateButtonText($event)"
+            placeholder="Enter button text"
+          />
+        </div>
+        
+        <div class="editor-group">
+          <label>Button URL:</label>
+          <input 
+            type="url" 
+            class="form-control"
+            [value]="getContent().buttonUrl || ''"
+            (input)="updateButtonUrl($event)"
+            placeholder="Enter button URL"
+          />
+        </div>
+        
+        <div class="editor-group">
+          <label>Background Image URL:</label>
+          <input 
+            type="url" 
+            class="form-control"
+            [value]="getContent().backgroundImage || ''"
+            (input)="updateBackgroundImage($event)"
+            placeholder="Enter background image URL"
+          />
+        </div>
+      </div>
+      
+      <div class="editor-actions">
+        <button class="btn btn-primary" (click)="finishEditing()">Done</button>
+      </div>
+    </div>
+  } @else {
+    <div class="hero-content" (dblclick)="startEditing()">
+      <h1 class="hero-title">{{ getContent().title || 'Hero Title' }}</h1>
+      <p class="hero-subtitle">{{ getContent().subtitle || 'Hero subtitle text goes here' }}</p>
+      @if (getContent().buttonText) {
+        <a [href]="getContent().buttonUrl || '#'" class="hero-button">
+          {{ getContent().buttonText }}
+        </a>
+      }
+    </div>
+  }
+</div>

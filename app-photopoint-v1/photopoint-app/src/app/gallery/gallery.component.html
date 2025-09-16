@@ -1,0 +1,517 @@
+<div class="gallery-container">
+  <!-- Header -->
+  <div class="gallery-header">
+    <div class="header-content">
+      <div class="header-info">
+        <h1>Media Gallery</h1>
+        <p>Organize your images and videos in folders</p>
+      </div>
+      <div class="header-actions">
+        <button 
+          class="btn btn-secondary" 
+          (click)="openCreateFolderModal()"
+          [disabled]="loading()"
+        >
+          <i class="fas fa-folder-plus"></i>
+          New Folder
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error Display -->
+  @if (error()) {
+    <div class="error-banner">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span>{{ error() }}</span>
+      <button class="btn-close" (click)="error.set(null)">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  }
+
+  <!-- Main Content -->
+  <div class="gallery-content">
+    <!-- Sidebar - Folders -->
+    <div class="gallery-sidebar">
+      <div class="sidebar-header">
+        <h3>Folders</h3>
+      </div>
+      
+      @if (loading() && folders().length === 0) {
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <span>Loading folders...</span>
+        </div>
+      } @else if (folders().length === 0) {
+        <div class="empty-state">
+          <i class="fas fa-folder-open"></i>
+          <span>No folders yet</span>
+          <button class="btn btn-sm btn-primary" (click)="openCreateFolderModal()">
+            Create First Folder
+          </button>
+        </div>
+      } @else {
+        <div class="folders-list">
+          @for (folder of folders(); track folder.id) {
+            <div 
+              class="folder-item" 
+              [class.active]="selectedFolderId() === folder.id"
+              (click)="selectFolder(folder.id)"
+            >
+              <div class="folder-icon">
+                <i [class]="getFolderIcon(folder)"></i>
+              </div>
+              <div class="folder-info">
+                <div class="folder-name">
+                  {{ folder.name }}
+                  @if (folder.allowWebsiteUsage) {
+                    <span class="website-enabled-badge" title="Website usage enabled">
+                      <i class="fas fa-globe"></i>
+                    </span>
+                  }
+                </div>
+                <div class="folder-count">{{ folder.fileCount }} items</div>
+              </div>
+              <div class="folder-actions">
+                <button 
+                  class="btn-icon btn-secondary" 
+                  (click)="openFolderSettingsModal(folder); $event.stopPropagation()"
+                  title="Folder settings"
+                >
+                  <i class="fas fa-cog"></i>
+                </button>
+                <button 
+                  class="btn-icon btn-danger" 
+                  (click)="deleteFolder(folder.id); $event.stopPropagation()"
+                  title="Delete folder"
+                >
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Main Area - Files -->
+    <div class="gallery-main">
+      @if (!selectedFolderId()) {
+        <!-- No folder selected -->
+        <div class="no-selection">
+          <i class="fas fa-folder-open"></i>
+          <h3>Select a folder</h3>
+          <p>Choose a folder from the sidebar to view its contents</p>
+        </div>
+      } @else {
+        <!-- Upload Area -->
+        <div 
+          class="upload-area"
+          [class.drag-over]="dragOver()"
+          [class.uploading]="uploading()"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave($event)"
+          (drop)="onDrop($event)"
+        >
+          @if (uploading()) {
+            <div class="upload-progress">
+              <div class="loading-spinner"></div>
+              <span>Uploading files...</span>
+            </div>
+          } @else {
+            <div class="upload-content">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <div class="upload-text">
+                <h4>Drop files here or click to upload</h4>
+                <p>Supports images and videos</p>
+              </div>
+              <input 
+                type="file" 
+                multiple 
+                accept="image/*,video/*" 
+                (change)="onFileSelect($event)"
+                #fileInput
+                hidden
+              >
+              <button class="btn btn-primary" (click)="fileInput.click()">
+                <i class="fas fa-upload"></i>
+                Choose Files
+              </button>
+            </div>
+          }
+        </div>
+
+        <!-- Files Grid -->
+        @if (selectedFolderId()) {
+          <!-- Selection Toolbar -->
+          <div class="selection-toolbar">
+            <div class="selection-controls">
+              <button 
+                class="btn btn-sm"
+                [class.btn-primary]="!selectionMode()"
+                [class.btn-secondary]="selectionMode()"
+                (click)="toggleSelectionMode()">
+                @if (selectionMode()) {
+                  <i class="fas fa-times"></i>
+                  Cancel Selection
+                } @else {
+                  <i class="fas fa-check-square"></i>
+                  Select Files
+                }
+              </button>
+              
+              @if (selectionMode()) {
+                <div class="selection-actions">
+                  <span class="selection-count">{{ selectedCount }} selected</span>
+                  <button 
+                    class="btn btn-sm btn-outline" 
+                    (click)="selectAllFiles()"
+                    [disabled]="selectedCount === files().length">
+                    Select All
+                  </button>
+                  <button 
+                    class="btn btn-sm btn-outline" 
+                    (click)="clearSelection()"
+                    [disabled]="selectedCount === 0">
+                    Clear
+                  </button>
+                  <button 
+                    class="btn btn-sm btn-danger" 
+                    (click)="deleteSelectedFiles()"
+                    [disabled]="selectedCount === 0">
+                    <i class="fas fa-trash"></i>
+                    Delete Selected
+                  </button>
+                  <button 
+                    class="btn btn-sm btn-primary" 
+                    (click)="openCopyMoveModal('copy')"
+                    [disabled]="selectedCount === 0">
+                    <i class="fas fa-copy"></i>
+                    Copy to Folder
+                  </button>
+                  <button 
+                    class="btn btn-sm btn-secondary" 
+                    (click)="openCopyMoveModal('move')"
+                    [disabled]="selectedCount === 0">
+                    <i class="fas fa-arrows-alt"></i>
+                    Move to Folder
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        @if (loading()) {
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <span>Loading files...</span>
+          </div>
+        } @else if (files().length === 0) {
+          <div class="empty-files">
+            <i class="fas fa-images"></i>
+            <h4>No files in this folder</h4>
+            <p>Upload some images or videos to get started</p>
+          </div>
+        } @else {
+          <div class="files-grid">
+            @for (file of files(); track file.id) {
+              <div class="file-card" 
+                   [class.selected]="selectionMode() && isFileSelected(file.id)"
+                   (click)="onFileCardClick(file, $event)">
+                
+                <!-- Selection checkbox (only visible in selection mode) -->
+                @if (selectionMode()) {
+                  <div class="selection-checkbox">
+                    <input 
+                      type="checkbox" 
+                      [checked]="isFileSelected(file.id)"
+                      (click)="toggleFileSelection(file.id, $event)"
+                      (change)="$event.stopPropagation()">
+                  </div>
+                }
+                
+                <div class="file-preview">
+                  @if (file.fileType === 'image') {
+                    @if (getThumbnailUrl(file.id)) {
+                      <img 
+                        [src]="getThumbnailUrl(file.id)" 
+                        [alt]="file.originalName"
+                        loading="lazy"
+                        decoding="async"
+                        [style.cursor]="selectionMode() ? 'pointer' : 'pointer'"
+                      />
+                    } @else {
+                      <!-- No thumbnail available - show placeholder -->
+                      <div class="no-thumbnail-placeholder">
+                        <i class="fas fa-image"></i>
+                        <span>No Preview</span>
+                      </div>
+                    }
+                  } @else {
+                    <div class="video-thumbnail">
+                      @if (getThumbnailUrl(file.id)) {
+                        <img 
+                          [src]="getThumbnailUrl(file.id)" 
+                          [alt]="file.originalName"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      } @else {
+                        <!-- No thumbnail available - show placeholder -->
+                        <div class="no-thumbnail-placeholder">
+                          <i class="fas fa-video"></i>
+                          <span>No Preview</span>
+                        </div>
+                      }
+                      <div class="video-overlay">
+                        <i class="fas fa-play"></i>
+                      </div>
+                    </div>
+                  }
+                  
+                  <!-- Overlay actions -->
+                  <div class="file-actions-overlay">
+                    <button 
+                      class="btn-icon btn-secondary" 
+                      title="Copy URL"
+                      (click)="copyFileUrl(file); $event.stopPropagation()"
+                    >
+                      <i class="fas fa-copy"></i>
+                    </button>
+                    <button 
+                      class="btn-icon btn-danger" 
+                      title="Delete file"
+                      (click)="deleteFile(file.id); $event.stopPropagation()"
+                    >
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="file-info">
+                  <div class="file-name" [title]="file.originalName">{{ file.originalName }}</div>
+                  <div class="file-meta">
+                    <span class="file-size">{{ formatFileSize(file.fileSize) }}</span>
+                    <span class="file-type">
+                      <i [class]="getFileIcon(file)"></i>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+  </div>
+</div>
+
+<!-- Create Folder Modal -->
+@if (showCreateFolderModal()) {
+  <div class="modal-backdrop" (click)="closeCreateFolderModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Create New Folder</h3>
+        <button class="btn-close" (click)="closeCreateFolderModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="folderName">Folder Name</label>
+          <input 
+            type="text" 
+            id="folderName"
+            class="form-control"
+            [(ngModel)]="newFolderName"
+            placeholder="Enter folder name"
+            (keyup.enter)="createFolder()"
+            maxlength="50"
+          >
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeCreateFolderModal()">
+          Cancel
+        </button>
+        <button 
+          class="btn btn-primary" 
+          (click)="createFolder()"
+          [disabled]="!newFolderName().trim()"
+        >
+          Create Folder
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Folder Settings Modal -->
+@if (showFolderSettingsModal() && selectedFolder()) {
+  <div class="modal-backdrop" (click)="closeFolderSettingsModal()">
+    <div class="modal-content folder-settings-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Folder Settings: {{ selectedFolder()!.name }}</h3>
+        <button class="btn-close" (click)="closeFolderSettingsModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <h4>Website Usage</h4>
+          <p class="section-description">Control how this folder's media can be used in your websites</p>
+          
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input 
+                type="checkbox" 
+                [checked]="selectedFolder()!.allowWebsiteUsage"
+                (change)="updateFolderSettings({
+                  allowWebsiteUsage: $any($event.target).checked,
+                  websiteUsagePermissions: selectedFolder()!.websiteUsagePermissions,
+                  description: selectedFolder()!.description
+                })"
+              >
+              <span class="checkmark"></span>
+              Allow this folder's media to be used in websites
+            </label>
+          </div>
+
+          @if (selectedFolder()!.allowWebsiteUsage) {
+            <div class="form-group">
+              <label for="usagePermissions">Website Access</label>
+              <select 
+                id="usagePermissions"
+                class="form-control"
+                [value]="selectedFolder()!.websiteUsagePermissions"
+                (change)="updateFolderSettings({
+                  allowWebsiteUsage: selectedFolder()!.allowWebsiteUsage,
+                  websiteUsagePermissions: $any($event.target).value,
+                  description: selectedFolder()!.description
+                })"
+              >
+                <option value="private">Private - Only you can use this media</option>
+                <option value="all_websites">All Websites - Any of your websites can use this media</option>
+                <option value="specific_websites">Specific Websites - Choose which websites can access this media</option>
+              </select>
+            </div>
+
+            @if (selectedFolder()!.websiteUsagePermissions === 'specific_websites') {
+              <div class="form-group">
+                <label>Allowed Websites</label>
+                <p class="help-text">Manage which specific websites can access this folder's media</p>
+                <button class="btn btn-secondary btn-sm">
+                  <i class="fas fa-plus"></i>
+                  Manage Website Permissions
+                </button>
+              </div>
+            }
+          }
+        </div>
+
+        <div class="settings-section">
+          <h4>Description</h4>
+          <div class="form-group">
+            <label for="folderDescription">Folder Description</label>
+            <textarea 
+              id="folderDescription"
+              class="form-control"
+              rows="3"
+              placeholder="Add a description for this folder..."
+              [value]="selectedFolder()!.description || ''"
+              (blur)="updateFolderSettings({
+                allowWebsiteUsage: selectedFolder()!.allowWebsiteUsage,
+                websiteUsagePermissions: selectedFolder()!.websiteUsagePermissions,
+                description: $any($event.target).value
+              })"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>Folder Info</h4>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Created</label>
+              <span>{{ selectedFolder()!.createdAt | date:'medium' }}</span>
+            </div>
+            <div class="info-item">
+              <label>Files</label>
+              <span>{{ selectedFolder()!.fileCount }} items</span>
+            </div>
+            <div class="info-item">
+              <label>Status</label>
+              <span class="status-badge" [class]="selectedFolder()!.allowWebsiteUsage ? 'status-public' : 'status-private'">
+                {{ selectedFolder()!.allowWebsiteUsage ? 'Website Enabled' : 'Private' }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeFolderSettingsModal()">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Copy/Move Modal -->
+@if (showCopyMoveModal()) {
+  <div class="modal-overlay" (click)="closeCopyMoveModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ copyMoveAction() === 'copy' ? 'Copy' : 'Move' }} Files to Folder</h3>
+        <button class="btn-close" (click)="closeCopyMoveModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <p class="modal-description">
+          Select a destination folder to {{ copyMoveAction() }} {{ selectedCount }} selected file(s).
+          @if (copyMoveAction() === 'move') {
+            <br><strong>Note:</strong> Files will be removed from the current folder.
+          }
+        </p>
+        
+        <div class="folder-selection">
+          <h4>Available Folders:</h4>
+          <div class="folder-list">
+            @for (folder of availableFolders(); track folder.id) {
+              <button 
+                class="folder-option"
+                (click)="copyOrMoveFiles(folder.id)">
+                <i class="fas fa-folder"></i>
+                <span>{{ folder.name }}</span>
+                <span class="file-count">({{ folder.fileCount }} files)</span>
+              </button>
+            }
+          </div>
+          
+          @if (availableFolders().length === 0) {
+            <div class="empty-state">
+              <i class="fas fa-folder-open"></i>
+              <p>No other folders available. Create a new folder first.</p>
+              <button class="btn btn-primary" (click)="closeCopyMoveModal(); openCreateFolderModal()">
+                <i class="fas fa-folder-plus"></i>
+                Create New Folder
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Image Modal -->
+<app-image-modal
+  [images]="modalImages"
+  [currentIndex]="modalCurrentIndex"
+  [isVisible]="showImageModal"
+  (close)="closeImageModal()"
+  (indexChange)="onModalIndexChange($event)">
+</app-image-modal>

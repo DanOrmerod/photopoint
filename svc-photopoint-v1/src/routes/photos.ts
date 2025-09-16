@@ -3,6 +3,7 @@ import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -97,7 +98,7 @@ router.post('/upload', upload.single('photo'), (req: Request, res: Response): vo
       }
     };
 
-    console.log(`✅ Photo uploaded successfully: ${req.file.originalname} (${req.file.size} bytes)`);
+    logger.info(`✅ Photo uploaded successfully: ${req.file.originalname} (${req.file.size} bytes)`);
 
     res.json({
       success: true,
@@ -105,7 +106,7 @@ router.post('/upload', upload.single('photo'), (req: Request, res: Response): vo
     } as UploadResponse);
 
   } catch (error) {
-    console.error('❌ Upload error:', error);
+    logger.error('❌ Upload error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to upload photo'
@@ -150,12 +151,12 @@ router.post('/upload-multiple', upload.array('photos', 10), (req: Request, res: 
       } as UploadResponse;
     });
 
-    console.log(`✅ ${files.length} photos uploaded successfully`);
+    logger.info(`✅ ${files.length} photos uploaded successfully`);
 
     res.json(responses);
 
   } catch (error) {
-    console.error('❌ Multiple upload error:', error);
+    logger.error('❌ Multiple upload error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to upload photos'

@@ -1,0 +1,288 @@
+.theme-customizer {
+  width: 400px;
+  height: 100vh;
+  background: white;
+  border-left: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.customizer-header {
+  padding: 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    i {
+      color: #3b82f6;
+    }
+  }
+}
+
+.close-btn {
+  padding: 6px;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #3b82f6;
+  }
+}
+
+.customizer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+
+  /* Custom scrollbar */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+
+    &:hover {
+      background: #94a3b8;
+    }
+  }
+}
+
+.section {
+  margin-bottom: 32px;
+
+  h4 {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+  }
+}
+
+.themes-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.theme-card {
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  &.active {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+}
+
+.theme-preview {
+  height: 120px;
+  overflow: hidden;
+}
+
+.theme-info {
+  padding: 12px;
+
+  h5 {
+    margin: 0 0 4px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  p {
+    margin: 0 0 8px 0;
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.4;
+  }
+}
+
+.category-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  border-radius: 4px;
+  letter-spacing: 0.025em;
+
+  &.category-business {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  &.category-creative {
+    background: #fef3e2;
+    color: #ea580c;
+  }
+
+  &.category-portfolio {
+    background: #f3e8ff;
+    color: #7c3aed;
+  }
+
+  &.category-e-commerce {
+    background: #dcfce7;
+    color: #16a34a;
+  }
+
+  &.category-blog {
+    background: #fce7f3;
+    color: #be185d;
+  }
+}
+
+.color-controls, .typography-controls, .layout-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.color-group, .control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+  }
+}
+
+.color-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-picker {
+  width: 40px;
+  height: 32px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+}
+
+.color-text {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+}
+
+select {
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+}
+
+.range-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  input[type="range"] {
+    flex: 1;
+  }
+
+  span {
+    min-width: 40px;
+    font-size: 12px;
+    color: #64748b;
+    text-align: right;
+  }
+}
+
+.customizer-actions {
+  padding: 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+}
+
+.btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  &.btn-outline {
+    background: white;
+    color: #64748b;
+    border-color: #d1d5db;
+
+    &:hover {
+      background: #f9fafb;
+      border-color: #9ca3af;
+    }
+  }
+
+  &.btn-primary {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+
+    &:hover {
+      background: #2563eb;
+      border-color: #2563eb;
+    }
+  }
+}

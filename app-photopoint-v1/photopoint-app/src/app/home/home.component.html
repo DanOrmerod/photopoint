@@ -1,0 +1,135 @@
+<div class="dashboard-container">
+  @if (authService.isAuthenticated()) {
+    <!-- Authenticated User Dashboard -->
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+      <div class="header-content">
+        <div>
+          <h1>My Websites</h1>
+          <p>Manage and create your website instances</p>
+        </div>
+        <button class="btn-primary" (click)="createNewWebsite()">
+          <span class="icon">+</span>
+          Create New Website
+        </button>
+      </div>
+    </div>
+
+    <!-- Websites Grid -->
+    <div class="websites-section">
+      @if (loading()) {
+        <!-- Loading State -->
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>Loading your websites...</p>
+        </div>
+      } @else if (error()) {
+        <!-- Error State -->
+        <div class="error-state">
+          <div class="error-icon">⚠️</div>
+          <h3>Failed to load websites</h3>
+          <p>{{ error() }}</p>
+          <button class="btn-secondary" (click)="loadWebsites()">
+            Try Again
+          </button>
+        </div>
+      } @else if (websites().length === 0) {
+        <!-- Empty State -->
+        <div class="empty-state">
+          <div class="empty-icon">🌐</div>
+          <h3>No websites yet</h3>
+          <p>Create your first website to get started with our CMS platform</p>
+          <button class="btn-primary" (click)="createNewWebsite()">
+            Create Your First Website
+          </button>
+        </div>
+      } @else {
+        <!-- Websites Grid -->
+        <div class="websites-grid">
+          @for (website of websites(); track website.id) {
+            <div class="website-card" [class]="'status-' + website.status">
+              <div class="website-header">
+                <h3>{{ website.name }}</h3>
+                <span class="status-badge" [class]="'badge-' + website.status">
+                  {{ website.status }}
+                </span>
+              </div>
+              
+              <div class="website-info">
+                <p class="domain">{{ website.customDomain || website.subdomain + '.photopoint.app' }}</p>
+                <div class="meta">
+                  <span>{{ website.pageCount || 0 }} pages</span>
+                  <span>Modified {{ getRelativeTime(website.updatedAt) }}</span>
+                </div>
+              </div>
+              
+              <div class="website-actions">
+                <button class="btn-secondary" (click)="editWebsite(website.id)">
+                  Edit
+                </button>
+                <button class="btn-primary" (click)="openWebsite(website.id)">
+                  Open CMS
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-section">
+      <div class="stat-card">
+        <div class="stat-number">{{ websites().length }}</div>
+        <div class="stat-label">Total Websites</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ getActiveWebsites() }}</div>
+        <div class="stat-label">Active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ getTotalPages() }}</div>
+        <div class="stat-label">Total Pages</div>
+      </div>
+    </div>
+  } @else {
+    <!-- Unauthenticated User Welcome -->
+    <div class="welcome-section">
+      <div class="welcome-hero">
+        <h1>Welcome to PhotoPoint CMS</h1>
+        <p>Create and manage beautiful websites with our powerful multi-tenant CMS platform</p>
+        <div class="welcome-actions">
+          <button class="btn-primary" (click)="goToLogin()">
+            Sign In
+          </button>
+          <button class="btn-secondary" (click)="goToRegister()">
+            Create Account
+          </button>
+        </div>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <h3>Multi-Tenant Websites</h3>
+          <p>Create and manage multiple websites from one dashboard</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎨</div>
+          <h3>Beautiful Themes</h3>
+          <p>Choose from professionally designed themes or customize your own</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📝</div>
+          <h3>Easy Content Management</h3>
+          <p>Intuitive content editor with drag-and-drop functionality</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🚀</div>
+          <h3>Fast & Reliable</h3>
+          <p>Built with modern technology for speed and reliability</p>
+        </div>
+      </div>
+    </div>
+  }
+</div>

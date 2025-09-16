@@ -1,0 +1,71 @@
+<div class="modal-overlay" [class.visible]="isVisible()" (click)="onOverlayClick($event)">
+  <div class="modal-content">
+    <!-- Close button -->
+    <button class="close-btn" (click)="closeModal()" type="button" aria-label="Close">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <!-- Navigation buttons -->
+    <button 
+      class="nav-btn prev-btn" 
+      [class.visible]="canGoPrevious()"
+      (click)="previous()"
+      [disabled]="!canGoPrevious()"
+      type="button"
+      aria-label="Previous image">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <button 
+      class="nav-btn next-btn" 
+      [class.visible]="canGoNext()"
+      (click)="next()"
+      [disabled]="!canGoNext()"
+      type="button"
+      aria-label="Next image">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <!-- Image container -->
+    <div class="image-container">
+      @if (currentImageUrl() && currentImage()) {
+        <img 
+          [src]="currentImageUrl()" 
+          [alt]="currentImage().originalName || 'Image'"
+          class="modal-image"
+          [class.loading]="isImageLoading()"
+          (load)="onImageLoad()"
+          (error)="onImageError()"
+          loading="eager">
+      } @else if (imageError()) {
+        <div class="error-placeholder">
+          <i class="fas fa-exclamation-triangle"></i>
+          <p>Failed to load image</p>
+        </div>
+      } @else {
+        <div class="loading-placeholder">
+          <div class="spinner"></div>
+          <p>Loading image...</p>
+        </div>
+      }
+    </div>
+
+    <!-- Image info -->
+    <div class="image-info" *ngIf="currentImage()">
+      <div class="image-details">
+        <h3>{{ currentImage().originalName }}</h3>
+        <div class="image-meta">
+          <span class="file-size">{{ formatFileSize(currentImage().fileSize || 0) }}</span>
+          <span class="file-type">{{ currentImage().mimeType }}</span>
+          <span class="image-count">{{ currentIndex() + 1 }} of {{ images().length }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

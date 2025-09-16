@@ -1,0 +1,227 @@
+<div class="columns-block" [ngStyle]="data.styles">
+  @if (isEditing) {
+    <!-- Columns Editor -->
+    <div class="inline-columns-editor" (click)="$event.stopPropagation()">
+      <div class="columns-toolbar">
+        <div class="toolbar-group">
+          <label>Columns:</label>
+          <select 
+            class="column-count-select"
+            [value]="getContent().columnCount || 2"
+            (change)="updateColumnCount($event)"
+          >
+            <option value="1">1 Column</option>
+            <option value="2">2 Columns</option>
+            <option value="3">3 Columns</option>
+            <option value="4">4 Columns</option>
+          </select>
+        </div>
+        
+        <div class="toolbar-group">
+          <label>Gap:</label>
+          <select 
+            class="form-control"
+            [value]="getContent().gap || '16px'"
+            (change)="updateGap($event)"
+          >
+            <option value="8px">Small (8px)</option>
+            <option value="16px">Medium (16px)</option>
+            <option value="24px">Large (24px)</option>
+            <option value="32px">Extra Large (32px)</option>
+          </select>
+        </div>
+        
+        <button class="btn btn-primary" (click)="finishEditing()">Done</button>
+      </div>
+      
+      <div class="inline-columns-container" [style.gap]="getContent().gap || '16px'">
+        @for (column of getContent().columns || []; track $index; let i = $index) {
+          <div class="inline-column-editor">
+            <div class="column-header">
+              <span>Column {{ i + 1 }}</span>
+              <div class="column-width-control">
+                <label>Width:</label>
+                <input 
+                  type="text" 
+                  class="width-input"
+                  [value]="column.width || 'auto'"
+                  (input)="updateColumnWidth(i, $event)"
+                  placeholder="auto, 50%, 200px"
+                />
+              </div>
+            </div>
+            <div 
+              class="column-content-editor"
+              contenteditable="true"
+              [innerHTML]="column.content || ''"
+              (input)="updateColumnContent(i, $event)"
+              (click)="$event.stopPropagation()"
+              [attr.data-placeholder]="'Enter content for column ' + (i + 1)"
+            ></div>
+          </div>
+        }
+      </div>
+    </div>
+  } @else {
+    <div 
+      class="columns-container" 
+      [style.gap]="getContent().gap || '16px'"
+      (dblclick)="startEditing()"
+    >
+      @if (!isPreview) {
+        <div class="columns-overlay">
+          Drag components into columns or click edit to configure
+        </div>
+      }
+      @for (column of getContent().columns || []; track $index; let colIndex = $index) {
+        <div 
+          class="column" 
+          [style.width]="column.width || 'auto'"
+          [style.flex]="column.width ? 'none' : '1'"
+          [class.drop-zone-active]="dragOverColumnIndex === colIndex"
+          (dragover)="onDragOver($event, colIndex)"
+          (dragleave)="onDragLeave($event)"
+          (drop)="onDrop($event, colIndex)"
+        >
+          <!-- Nested blocks within column -->
+          @if (column.blocks && column.blocks.length > 0) {
+            @for (block of column.blocks; track block.id; let blockIndex = $index) {
+              <div class="nested-block-wrapper">
+                <!-- Drop zone before block -->
+                @if (!isPreview) {
+                  <div 
+                    class="column-drop-zone"
+                    [class.active]="dragOverColumnIndex === colIndex"
+                    (dragover)="onDragOver($event, colIndex)"
+                    (drop)="onDrop($event, colIndex, blockIndex)"
+                  >
+                    <div class="drop-indicator">
+                      <i class="fas fa-plus"></i>
+                      <span>Drop component here</span>
+                    </div>
+                  </div>
+                }
+                
+                <!-- Nested block component -->
+                <div 
+                  class="nested-block" 
+                  [attr.data-block-id]="block.id"
+                  [class.editing]="editingNestedBlockId === block.id"
+                  (click)="!isPreview && startNestedBlockEdit(block.id)"
+                >
+                  @switch (block.type) {
+                    @case ('text') {
+                      <app-text-block
+                        [data]="block"
+                        [isEditing]="editingNestedBlockId === block.id"
+                        [isSelected]="false"
+                        [isPreview]="isPreview"
+                        (contentChange)="updateNestedBlockContent(colIndex, block.id, $event)"
+                        (editingChange)="onNestedBlockEditingChange(block.id, $event)"
+                      ></app-text-block>
+                    }
+                    @case ('hero') {
+                      <app-hero-block
+                        [data]="block"
+                        [isEditing]="editingNestedBlockId === block.id"
+                        [isSelected]="false"
+                        [isPreview]="isPreview"
+                        (contentChange)="updateNestedBlockContent(colIndex, block.id, $event)"
+                        (editingChange)="onNestedBlockEditingChange(block.id, $event)"
+                      ></app-hero-block>
+                    }
+                    @case ('image') {
+                      <app-image-block
+                        [data]="block"
+                        [isEditing]="editingNestedBlockId === block.id"
+                        [isSelected]="false"
+                        [isPreview]="isPreview"
+                        (contentChange)="updateNestedBlockContent(colIndex, block.id, $event)"
+                        (editingChange)="onNestedBlockEditingChange(block.id, $event)"
+                      ></app-image-block>
+                    }
+                    @case ('button') {
+                      <app-button-block
+                        [data]="block"
+                        [isEditing]="editingNestedBlockId === block.id"
+                        [isSelected]="false"
+                        [isPreview]="isPreview"
+                        (contentChange)="updateNestedBlockContent(colIndex, block.id, $event)"
+                        (editingChange)="onNestedBlockEditingChange(block.id, $event)"
+                      ></app-button-block>
+                    }
+                    @case ('spacer') {
+                      <app-spacer-block
+                        [data]="block"
+                        [isEditing]="editingNestedBlockId === block.id"
+                        [isSelected]="false"
+                        [isPreview]="isPreview"
+                        (contentChange)="updateNestedBlockContent(colIndex, block.id, $event)"
+                        (editingChange)="onNestedBlockEditingChange(block.id, $event)"
+                      ></app-spacer-block>
+                    }
+                  }
+                  
+                  <!-- Block controls for nested blocks -->
+                  @if (!isPreview) {
+                    <div class="nested-block-controls">
+                      <button 
+                        class="control-btn danger" 
+                        (click)="deleteNestedBlock(colIndex, block.id)"
+                        title="Delete"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+            
+            <!-- Drop zone after last block -->
+            @if (!isPreview) {
+              <div 
+                class="column-drop-zone"
+                [class.active]="dragOverColumnIndex === colIndex"
+                (dragover)="onDragOver($event, colIndex)"
+                (drop)="onDrop($event, colIndex)"
+              >
+                <div class="drop-indicator">
+                  <i class="fas fa-plus"></i>
+                  <span>Drop component here</span>
+                </div>
+              </div>
+            }
+          } @else {
+            <!-- Empty column state -->
+            <div 
+              class="column-empty-state"
+              [class.drop-zone-active]="dragOverColumnIndex === colIndex"
+              (dragover)="onDragOver($event, colIndex)"
+              (drop)="onDrop($event, colIndex)"
+            >
+              @if (!isPreview) {
+                <div class="empty-message">
+                  <i class="fas fa-plus-circle"></i>
+                  <span>Drag components here</span>
+                </div>
+              }
+              
+              <!-- Legacy text content support - only show if no blocks exist -->
+              @if (column.content && (!column.blocks || column.blocks.length === 0)) {
+                <div 
+                  [innerHTML]="getSafeHtml(column.content)"
+                  (click)="startColumnContentEdit(colIndex, $event)"
+                ></div>
+              } @else if (isPreview && (!column.blocks || column.blocks.length === 0)) {
+                <div class="column-placeholder">
+                  Column {{ colIndex + 1 }}
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

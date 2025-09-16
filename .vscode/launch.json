@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach by Process ID",
+      "processId": "${command:PickProcess}",
+      "request": "attach",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Run npm dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/svc-photopoint-v1",
+      "console": "integratedTerminal",
+      "restart": true,
+      "env": {
+        "NODE_OPTIONS": "--inspect"
+      },
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/svc-photopoint-v1/dist/**/*.js"
+      ]
+    }
+  ]
+}
