@@ -3,15 +3,14 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { WebsiteService } from '../../services/website.service';
-import { CreateWebsiteRequest } from '../../services/website.service';
-import { TemplateService, Template } from '../../services/template.service';
-import { TemplateSelectorComponent } from '../template-selector/template-selector.component';
+import { TemplateService } from '../../services/template.service';
+import { CreateWebsiteRequest, Template } from '../../models';
 import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-website-create',
   standalone: true,
-  imports: [CommonModule, RouterModule, ReactiveFormsModule, TemplateSelectorComponent],
+  imports: [CommonModule, RouterModule, ReactiveFormsModule],
   templateUrl: './website-create.component.html',
   styleUrl: './website-create.component.scss'
 })
@@ -92,11 +91,8 @@ export class WebsiteCreateComponent {
   }
 
   async onSubmit() {
-    if (this.websiteForm.invalid || !this.selectedTemplate()) {
+    if (this.websiteForm.invalid) {
       this.markFormGroupTouched();
-      if (!this.selectedTemplate()) {
-        this.error.set('Please select a template for your website.');
-      }
       return;
     }
 
@@ -105,7 +101,7 @@ export class WebsiteCreateComponent {
 
     try {
       const formValue = this.websiteForm.value;
-      const template = this.selectedTemplate()!;
+      const template = this.selectedTemplate();
       
       console.log('Creating website with template:', template);
       console.log('Form value:', formValue);
@@ -115,8 +111,8 @@ export class WebsiteCreateComponent {
         description: formValue.description || undefined,
         subdomain: formValue.subdomain,
         customDomain: formValue.customDomain || undefined,
-        theme: template.theme.id,
-        templateId: template.id
+        theme: template?.theme?.id || 'default',
+        templateId: template?.id
       };
 
       console.log('Website data:', websiteData);

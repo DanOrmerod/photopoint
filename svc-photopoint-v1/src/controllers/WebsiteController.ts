@@ -1,255 +1,331 @@
 import { Request, Response } from 'express';
-import { WebsiteRepository, CreateWebsiteData, UpdateWebsiteData } from '../database/repositories/WebsiteRepository';
-import { PageRepository } from '../database/repositories/PageRepository';
-import { AuthenticatedRequest } from '../middleware/auth';
+import { WebsiteRepository } from '../repositories/WebsiteRepository';
+import { WebsitePageRepository } from '../repositories/WebsitePageRepository';
+import { PageComponentRepository } from '../repositories/PageComponentRepository';
+import { TemplateRepository } from '../repositories/TemplateRepository';
+import { ValidationUtils, ValidationError, NotFoundError } from '../utils/validation';
+import { asyncHandler } from '../middleware/errorHandler';
+import { createSuccessResponse } from '../middleware/errorHandler';
 
 export class WebsiteController {
-  private websiteRepo: WebsiteRepository;
-  private pageRepo: PageRepository;
+  private websiteRepository: WebsiteRepository;
+  private websitePageRepository: WebsitePageRepository;
+  private pageComponentRepository: PageComponentRepository;
+  private templateRepository: TemplateRepository;
 
   constructor() {
-    this.websiteRepo = new WebsiteRepository();
-    this.pageRepo = new PageRepository();
+    this.websiteRepository = new WebsiteRepository();
+    this.websitePageRepository = new WebsitePageRepository();
+    this.pageComponentRepository = new PageComponentRepository();
+    this.templateRepository = new TemplateRepository();
   }
 
-  async getAllWebsites(req: Request, res: Response): Promise<void> {
-    try {
-      const accountId = (req as AuthenticatedRequest).user.accountId;
-      if (!accountId) {
-        res.status(401).json({ error: 'User not authenticated' });
-        return;
-      }
-      
-      const websites = await this.websiteRepo.findByAccountId(accountId);
-      res.json(websites);
-    } catch (error) {
-      console.error('Error fetching websites:', error);
-      res.status(500).json({ error: 'Internal server error' });
+  // Helper validation methods
+  private validateAccountId(accountId: any): string {
+    if (!accountId || typeof accountId !== 'string' || accountId.trim() === '') {
+      throw new ValidationError('Account ID is required');
+    }
+    return accountId;
+  }
+
+  private validateId(id: any, type: string = 'ID'): string {
+    if (!id || typeof id !== 'string' || id.trim() === '') {
+      throw new ValidationError(`${type} is required`);
+    }
+    return id;
+  }
+
+  private validateRequestData(data: any, validator: (data: any) => any): void {
+    const result = validator(data);
+    if (!result.isValid) {
+      throw new ValidationError('Validation failed', result.errors);
     }
   }
 
-  async getWebsite(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const accountId = (req as AuthenticatedRequest).user.accountId;
+  // Website CRUD methods
+  getAllWebsites = asyncHandler(async (req: Request, res: Response) => {
+    const accountId = this.validateAccountId(req.user?.accountId);
+    const websites = await this.websiteRepository.findByAccountId(accountId);
+    res.json(createSuccessResponse(websites));
+  });
 
-      if (!accountId) {
-        res.status(401).json({ error: 'User not authenticated' });
-        return;
-      }
+  getWebsite = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const accountId = this.validateAccountId(req.user?.accountId);
+    const websiteId = this.validateId(id, 'Website ID');
 
-      const website = await this.websiteRepo.findById(id, accountId);
-      
-      if (!website) {
-        res.status(404).json({ error: 'Website not found' });
-        return;
-      }
-
-      res.json(website);
-    } catch (error) {
-      console.error('Error fetching website:', error);
-      res.status(500).json({ error: 'Internal server error' });
+    const website = await this.websiteRepository.findById(websiteId, accountId);
+    if (!website) {
+      throw new NotFoundError('Website', websiteId);
     }
-  }
+    res.json(createSuccessResponse(website));
+  });
 
-  async createWebsite(req: Request, res: Response): Promise<void> {
-    try {
-      const accountId = (req as AuthenticatedRequest).user.accountId;
-      if (!accountId) {
-        res.status(401).json({ error: 'User not authenticated' });
-        return;
-      }
+  createWebsite = asyncHandler(async (req: Request, res: Response) => {
+    const accountId = this.validateAccountId(req.user?.accountId);
+    this.validateRequestData(req.body, ValidationUtils.validateWebsite);
 
-      const { name, subdomain, theme, description, customDomain, templateId } = req.body as CreateWebsiteData;
+    const websiteData = {
+      ...req.body,
+      accountId: accountId
+    };
 
-      if (!name || !subdomain) {
-        res.status(400).json({ error: 'Name and subdomain are required' });
-        return;
-      }
+    const website = await this.websiteRepository.create(websiteData);
+    res.status(201).json(createSuccessResponse(website));
+  });
 
-      const website = await this.websiteRepo.create(accountId, { 
-        name, 
-        subdomain, 
-        theme, 
-        description, 
-        customDomain, 
-        templateId 
-      });
+  updateWebsite = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const accountId = this.validateAccountId(req.user?.accountId);
+    const websiteId = this.validateId(id, 'Website ID');
+    this.validateRequestData(req.body, ValidationUtils.validateWebsite);
 
-      res.status(201).json(website);
-    } catch (error) {
-      console.error('Error creating website:', error);
-      if (error instanceof Error && error.message.includes('UNIQUE KEY constraint')) {
-        res.status(409).json({ error: 'Subdomain already exists' });
-        return;
-      }
-      res.status(500).json({ error: 'Internal server error' });
+    const website = await this.websiteRepository.update(websiteId, accountId, req.body);
+    if (!website) {
+      throw new NotFoundError('Website', websiteId);
     }
-  }
+    res.json(createSuccessResponse(website));
+  });
 
-  async updateWebsite(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const accountId = (req as AuthenticatedRequest).user.accountId;
+  deleteWebsite = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const accountId = this.validateAccountId(req.user?.accountId);
+    const websiteId = this.validateId(id, 'Website ID');
 
-      if (!accountId) {
-        res.status(401).json({ error: 'User not authenticated' });
-        return;
-      }
-
-      const updateData = req.body as UpdateWebsiteData;
-
-      console.log('Updating website:', { id, updateData, accountId });
-
-      const website = await this.websiteRepo.update(id, accountId, updateData);
-
-      if (!website) {
-        res.status(404).json({ error: 'Website not found' });
-        return;
-      }
-
-      console.log('Updated website:', website.id);
-      res.json(website);
-    } catch (error) {
-      console.error('Error updating website:', error);
-      res.status(500).json({ error: 'Internal server error' });
+    const success = await this.websiteRepository.delete(websiteId, accountId);
+    if (!success) {
+      throw new NotFoundError('Website', websiteId);
     }
-  }
+    res.json(createSuccessResponse({ message: 'Website deleted successfully' }));
+  });
 
-  async deleteWebsite(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const accountId = (req as AuthenticatedRequest).user.accountId;
+  publishWebsite = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const accountId = this.validateAccountId(req.user?.accountId);
+    const websiteId = this.validateId(id, 'Website ID');
 
-      if (!accountId) {
-        res.status(401).json({ error: 'User not authenticated' });
-        return;
-      }
-
-      console.log('Deleting website:', { id, accountId });
-
-      const deleted = await this.websiteRepo.delete(id, accountId);
-
-      if (!deleted) {
-        res.status(404).json({ error: 'Website not found' });
-        return;
-      }
-
-      console.log('Deleted website:', id);
-      res.status(204).send();
-    } catch (error) {
-      console.error('Error deleting website:', error);
-      res.status(500).json({ error: 'Internal server error' });
+    const website = await this.websiteRepository.publish(websiteId, accountId);
+    if (!website) {
+      throw new NotFoundError('Website', websiteId);
     }
-  }
+    res.json(createSuccessResponse(website));
+  });
 
-  async publishWebsite(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const accountId = (req as AuthenticatedRequest).user.accountId;
+  // Page CRUD methods
+  getPages = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    const validWebsiteId = this.validateId(websiteId, 'Website ID');
 
-      if (!accountId) {
-        res.status(401).json({ error: 'User not authenticated' });
-        return;
-      }
+    const pages = await this.websitePageRepository.findByWebsiteId(validWebsiteId);
+    res.json(createSuccessResponse(pages));
+  });
 
-      console.log('Publishing website:', { id, accountId });
+  getPage = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, id } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    const validPageId = this.validateId(id, 'Page ID');
 
-      const website = await this.websiteRepo.publish(id, accountId);
-
-      if (!website) {
-        res.status(404).json({ error: 'Website not found' });
-        return;
-      }
-
-      console.log('Published website:', website.id, 'at', website.lastPublishedAt);
-      res.json({ 
-        message: 'Website published successfully',
-        website,
-        publishedAt: website.lastPublishedAt
-      });
-    } catch (error) {
-      console.error('Error publishing website:', error);
-      res.status(500).json({ error: 'Internal server error' });
+    const page = await this.websitePageRepository.findById(validPageId);
+    if (!page) {
+      throw new NotFoundError('Page', validPageId);
     }
-  }
+    res.json(createSuccessResponse(page));
+  });
 
-    // PUBLIC ENDPOINTS (NO AUTH)
-  async getPublishedWebsite(req: Request, res: Response): Promise<void> {
-    try {
-      const { website } = req.params; // Changed from siteSlug to website
-      
-      console.log('PUBLIC: Fetching published website for domain:', website);
-      
-      const websiteData = await this.websiteRepo.findBySubdomain(website);
-      
-      if (!websiteData) {
-        res.status(404).json({ error: 'Published website not found' });
-        return;
-      }
+  createPage = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    const validWebsiteId = this.validateId(websiteId, 'Website ID');
+    this.validateRequestData(req.body, ValidationUtils.validatePage);
 
-      // Get published pages for this website
-      const pages = await this.pageRepo.findPublishedByWebsiteId(websiteData.id);
+    const pageData = {
+      ...req.body,
+      websiteId: validWebsiteId
+    };
 
-      const response = {
-        id: websiteData.id,
-        name: websiteData.name,
-        domain: websiteData.domain,
-        subdomain: websiteData.subdomain,
-        theme: websiteData.theme,
-        settings: websiteData.settings || {},
-        lastPublishedAt: websiteData.lastPublishedAt,
-        pages: pages.map(page => ({
-          id: page.id,
-          title: page.title,
-          slug: page.slug,
-          html: page.content, // Return rendered HTML for viewer
-          metaTitle: page.metaTitle,
-          metaDescription: page.metaDescription,
-          isHomePage: page.isHomePage,
-          sortOrder: page.sortOrder
-        }))
-      };
+    const page = await this.websitePageRepository.create(pageData);
+    res.status(201).json(createSuccessResponse(page));
+  });
 
-      console.log('PUBLIC: Found website with', response.pages.length, 'published pages');
-      res.json(response);
-    } catch (error) {
-      console.error('PUBLIC: Error fetching published website:', error);
-      res.status(500).json({ error: 'Internal server error' });
+  updatePage = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, id } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    const validPageId = this.validateId(id, 'Page ID');
+    this.validateRequestData(req.body, ValidationUtils.validatePage);
+
+    const page = await this.websitePageRepository.update(validPageId, req.body);
+    if (!page) {
+      throw new NotFoundError('Page', validPageId);
     }
-  }
+    res.json(createSuccessResponse(page));
+  });
 
-  async getPublishedPage(req: Request, res: Response): Promise<void> {
-    try {
-      const { website, pageSlug } = req.params; // Changed from siteSlug to website
-      
-      console.log('PUBLIC: Fetching published page:', { website, pageSlug });
-      
-      const page = await this.pageRepo.findBySlug(website, pageSlug);
+  deletePage = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, id } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    const validPageId = this.validateId(id, 'Page ID');
 
-      if (!page) {
-        res.status(404).json({ error: 'Published page not found' });
-        return;
-      }
-
-      console.log('PUBLIC: Found published page:', page.title);
-      
-      // Return page with rendered HTML for viewer
-      const response = {
-        id: page.id,
-        title: page.title,
-        slug: page.slug,
-        html: page.content, // Return rendered HTML for viewer
-        metaTitle: page.metaTitle,
-        metaDescription: page.metaDescription,
-        isHomePage: page.isHomePage,
-        website: page.website
-      };
-      
-      res.json(response);
-    } catch (error) {
-      console.error('PUBLIC: Error fetching published page:', error);
-      res.status(500).json({ error: 'Internal server error' });
+    const success = await this.websitePageRepository.delete(validPageId);
+    if (!success) {
+      throw new NotFoundError('Page', validPageId);
     }
-  }
+    res.json(createSuccessResponse({ message: 'Page deleted successfully' }));
+  });
+
+  publishPage = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, id } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    const validPageId = this.validateId(id, 'Page ID');
+
+    const page = await this.websitePageRepository.publish(validPageId);
+    if (!page) {
+      throw new NotFoundError('Page', validPageId);
+    }
+    res.json(createSuccessResponse(page));
+  });
+
+  // Component CRUD methods
+  getPageComponents = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, pageId } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    const validPageId = this.validateId(pageId, 'Page ID');
+
+    const components = await this.pageComponentRepository.findByPageId(validPageId);
+    res.json(createSuccessResponse(components));
+  });
+
+  createComponent = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, pageId } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    const validPageId = this.validateId(pageId, 'Page ID');
+    this.validateRequestData(req.body, ValidationUtils.validateComponent);
+
+    const componentData = {
+      ...req.body,
+      pageId: validPageId
+    };
+
+    const component = await this.pageComponentRepository.create(componentData);
+    res.status(201).json(createSuccessResponse(component));
+  });
+
+  updateComponent = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, pageId, id } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    this.validateId(pageId, 'Page ID');
+    const validComponentId = this.validateId(id, 'Component ID');
+    this.validateRequestData(req.body, ValidationUtils.validateComponent);
+
+    const component = await this.pageComponentRepository.update(validComponentId, req.body);
+    if (!component) {
+      throw new NotFoundError('Component', validComponentId);
+    }
+    res.json(createSuccessResponse(component));
+  });
+
+  deleteComponent = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, pageId, id } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    this.validateId(pageId, 'Page ID');
+    const validComponentId = this.validateId(id, 'Component ID');
+
+    const success = await this.pageComponentRepository.delete(validComponentId);
+    if (!success) {
+      throw new NotFoundError('Component', validComponentId);
+    }
+    res.json(createSuccessResponse({ message: 'Component deleted successfully' }));
+  });
+
+  reorderComponents = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, pageId } = req.params;
+    const { componentIds } = req.body;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    this.validateId(pageId, 'Page ID');
+
+    if (!Array.isArray(componentIds) || componentIds.length === 0) {
+      throw new ValidationError('componentIds must be a non-empty array');
+    }
+
+    await this.pageComponentRepository.updateSortOrder(componentIds);
+    res.json(createSuccessResponse({ message: 'Components reordered successfully' }));
+  });
+
+  duplicateComponent = asyncHandler(async (req: Request, res: Response) => {
+    const { websiteId, pageId, id } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    this.validateId(websiteId, 'Website ID');
+    this.validateId(pageId, 'Page ID');
+    const validComponentId = this.validateId(id, 'Component ID');
+
+    // Get the original component
+    const originalComponent = await this.pageComponentRepository.findById(validComponentId);
+    if (!originalComponent) {
+      throw new NotFoundError('Component', validComponentId);
+    }
+
+    // Create a duplicate with modified data
+    const duplicateData = {
+      ...originalComponent,
+      id: undefined, // Remove ID so a new one is generated
+      sortOrder: (originalComponent.sortOrder || 0) + 1
+    };
+
+    const component = await this.pageComponentRepository.create(duplicateData);
+    res.status(201).json(createSuccessResponse(component));
+  });
+
+  // Template methods
+  getAllTemplates = asyncHandler(async (req: Request, res: Response) => {
+    this.validateAccountId(req.user?.accountId);
+    const templates = await this.templateRepository.findAll();
+    res.json(createSuccessResponse(templates));
+  });
+
+  getTemplateCategories = asyncHandler(async (req: Request, res: Response) => {
+    this.validateAccountId(req.user?.accountId);
+    // For now, return a static list of categories. This could be made dynamic later.
+    const categories = [
+      { id: 'business', name: 'Business', description: 'Professional business templates' },
+      { id: 'portfolio', name: 'Portfolio', description: 'Creative portfolio templates' },
+      { id: 'blog', name: 'Blog', description: 'Blog and content templates' },
+      { id: 'ecommerce', name: 'E-commerce', description: 'Online store templates' },
+      { id: 'personal', name: 'Personal', description: 'Personal website templates' }
+    ];
+    res.json(createSuccessResponse(categories));
+  });
+
+  getTemplate = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    this.validateAccountId(req.user?.accountId);
+    const templateId = this.validateId(id, 'Template ID');
+
+    const template = await this.templateRepository.findById(templateId);
+    if (!template) {
+      throw new NotFoundError('Template', templateId);
+    }
+    res.json(createSuccessResponse(template));
+  });
+
+  createTemplate = asyncHandler(async (req: Request, res: Response) => {
+    const accountId = this.validateAccountId(req.user?.accountId);
+    this.validateRequestData(req.body, ValidationUtils.validateTemplate);
+
+    const templateData = {
+      ...req.body,
+      accountId: accountId
+    };
+
+    const template = await this.templateRepository.create(templateData);
+    res.status(201).json(createSuccessResponse(template));
+  });
 }

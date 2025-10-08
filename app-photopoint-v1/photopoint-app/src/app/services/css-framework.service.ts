@@ -1,10 +1,5 @@
 import { Injectable } from '@angular/core';
-
-export interface CSSFramework {
-  baseCSS: string;
-  componentCSS: { [componentType: string]: string };
-  themeCSS: string;
-}
+import { CSSFramework } from '../models';
 
 @Injectable({
   providedIn: 'root'

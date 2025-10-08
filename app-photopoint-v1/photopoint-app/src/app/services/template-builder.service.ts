@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Template, TemplateBlock } from './template.service';
-import { Theme } from './theme.service';
+import { Template, TemplateBlock, Theme } from '../models';
 
 /**
  * Template Builder Service - Advanced template creation and management
@@ -24,9 +23,9 @@ export class TemplateBuilderService {
       category: config.category,
       thumbnail: config.thumbnail || this.generateThumbnailPath(config.id),
       theme: config.theme,
-      pages: config.pages.map(page => ({
+      pages: config.pages.map((page: any) => ({
         ...page,
-        blocks: page.blocks.map(block => this.enhanceBlock(block))
+        blocks: page.blocks.map((block: any) => this.enhanceBlock(block))
       })),
       features: config.features,
       pricing: config.pricing || 'free',

@@ -1,89 +1,72 @@
+import { ComponentType, ResponsiveStyles } from './component.model';
+
+/**
+ * Website-related interfaces that match the backend API
+ * These should be kept in sync with the backend Website and WebsitePage models
+ */
+
 export interface Website {
   id: string;
+  accountId: string;
   name: string;
   description?: string;
   subdomain: string;
+  domain?: string;
   customDomain?: string;
   favicon?: string;
+  theme: string;
   status: 'draft' | 'published' | 'archived';
-  theme?: string;
+  settings?: any;
   pageCount?: number;
   visits?: number;
-  accountId: string;
   createdAt: Date;
   updatedAt: Date;
+  lastPublishedAt?: Date;
 }
 
-export interface CreateWebsiteRequest {
-  name: string;
-  description?: string;
-  subdomain: string;
-  customDomain?: string;
-  theme?: string;
-  templateId?: string;
+export interface WebsitePage {
+  id: string;
+  websiteId: string;
+  title: string;
+  slug: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  isHomePage: boolean;
+  status: 'draft' | 'published';
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+  lastPublishedAt?: Date;
+  components?: PageComponent[];
+  // Backwards compatibility properties
+  content?: string;
+  isPublished?: boolean;
 }
 
-export interface UpdateWebsiteRequest {
-  name?: string;
-  description?: string;
-  customDomain?: string;
-  favicon?: string;
-  status?: 'draft' | 'published' | 'archived';
-  theme?: string;
-}
-
-// Page-related interfaces
+// Legacy Page interface for backwards compatibility
 export interface Page {
   id: string;
   websiteId: string;
   title: string;
   slug: string;
-  content?: string;
+  content: string;
   metaDescription?: string;
+  metaTitle?: string;
   isHomePage: boolean;
   isPublished: boolean;
-  status?: 'draft' | 'published' | 'archived';
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface CreatePageRequest {
-  title: string;
-  slug?: string;
-  content?: string;
-  metaTitle?: string;
-  metaDescription?: string;
-  isHomePage?: boolean;
-  sortOrder?: number;
-}
-
-export interface UpdatePageRequest {
-  title?: string;
-  slug?: string;
-  content?: string;
-  metaTitle?: string;
-  metaDescription?: string;
-  isHomePage?: boolean;
-  status?: 'draft' | 'published' | 'archived';
-  sortOrder?: number;
-}
-
-// Content Block interfaces
-export interface ContentBlock {
+export interface PageComponent {
   id: string;
   pageId: string;
-  type: 'text' | 'image' | 'button' | 'header' | 'gallery' | 'video';
-  content: any; // JSON content specific to block type
-  styles?: any; // CSS styles as JSON
+  componentType: ComponentType;
+  componentData: any;
+  styles: ResponsiveStyles;
   sortOrder: number;
+  parentId?: string;
   createdAt: Date;
   updatedAt: Date;
-}
-
-export interface CreateBlockRequest {
-  type: ContentBlock['type'];
-  content: any;
-  styles?: any;
-  sortOrder?: number;
 }

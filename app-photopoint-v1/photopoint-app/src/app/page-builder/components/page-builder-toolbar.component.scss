@@ -1,0 +1,285 @@
+// Page Builder Toolbar Styles
+// Based on requirements section 3.1 - Interface Layout & Components
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  height: 60px;
+  padding: 0 20px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  gap: 20px;
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  &:not(:last-child) {
+    border-right: 1px solid #e8e8e8;
+    padding-right: 20px;
+  }
+}
+
+// Base button styles
+.toolbar-btn,
+.device-btn,
+.toggle-btn,
+.panel-btn,
+.zoom-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #d0d0d0;
+  background-color: #ffffff;
+  color: #333;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-height: 36px;
+
+  &:hover:not(:disabled) {
+    background-color: #f8f9fa;
+    border-color: #007bff;
+  }
+
+  &:active:not(:disabled) {
+    background-color: #e9ecef;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.active {
+    background-color: #007bff;
+    color: #ffffff;
+    border-color: #007bff;
+
+    &:hover {
+      background-color: #0056b3;
+    }
+  }
+
+  i {
+    font-size: 16px;
+  }
+}
+
+// Specific button styles
+.save-btn {
+  &.has-changes {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #000;
+
+    &:hover {
+      background-color: #e0a800;
+      border-color: #d39e00;
+    }
+  }
+}
+
+.preview-btn {
+  &.active {
+    background-color: #28a745;
+    border-color: #28a745;
+
+    &:hover {
+      background-color: #218838;
+    }
+  }
+}
+
+.publish-btn {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: #ffffff;
+
+  &:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+  }
+}
+
+.ai-btn {
+  background-color: #6f42c1;
+  border-color: #6f42c1;
+  color: #ffffff;
+
+  &:hover {
+    background-color: #5a36a5;
+    border-color: #4e2a91;
+  }
+}
+
+// Device selector
+.device-selector {
+  display: flex;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  overflow: hidden;
+
+  .device-btn {
+    border: none;
+    border-radius: 0;
+    border-right: 1px solid #d0d0d0;
+    margin: 0;
+
+    &:last-child {
+      border-right: none;
+    }
+
+    &.active {
+      background-color: #007bff;
+      color: #ffffff;
+    }
+  }
+}
+
+// Width toggle
+.width-toggle {
+  display: flex;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  overflow: hidden;
+
+  .toggle-btn {
+    border: none;
+    border-radius: 0;
+    border-right: 1px solid #d0d0d0;
+    margin: 0;
+
+    &:last-child {
+      border-right: none;
+    }
+  }
+}
+
+// Zoom controls
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .zoom-level {
+    min-width: 45px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+  }
+
+  .zoom-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    min-height: 32px;
+    justify-content: center;
+
+    i {
+      font-size: 14px;
+    }
+  }
+}
+
+// Toolbar divider
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #e0e0e0;
+  margin: 0 4px;
+}
+
+// Icon styles (using text for now, can be replaced with actual icon font)
+i {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  line-height: 16px;
+  
+  &.icon-undo::before { content: '↶'; }
+  &.icon-redo::before { content: '↷'; }
+  &.icon-save::before { content: '💾'; }
+  &.icon-eye::before { content: '👁'; }
+  &.icon-upload::before { content: '⬆'; }
+  &.icon-desktop::before { content: '🖥'; }
+  &.icon-tablet::before { content: '📱'; }
+  &.icon-mobile::before { content: '📱'; }
+  &.icon-container::before { content: '▭'; }
+  &.icon-full-width::before { content: '▬'; }
+  &.icon-zoom-out::before { content: '−'; }
+  &.icon-zoom-in::before { content: '+'; }
+  &.icon-fit::before { content: '⟷'; }
+  &.icon-components::before { content: '🧩'; }
+  &.icon-properties::before { content: '⚙'; }
+  &.icon-ai::before { content: '🤖'; }
+}
+
+// Responsive design
+@media (max-width: 1200px) {
+  .toolbar {
+    padding: 0 15px;
+    gap: 15px;
+  }
+
+  .toolbar-section {
+    padding-right: 15px;
+  }
+
+  // Hide text on smaller screens, keep icons
+  .toolbar-btn span,
+  .ai-btn span {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    padding: 0 10px;
+    gap: 10px;
+  }
+
+  .toolbar-section {
+    padding-right: 10px;
+    gap: 6px;
+  }
+
+  // Make buttons smaller on mobile
+  .toolbar-btn,
+  .device-btn,
+  .toggle-btn,
+  .panel-btn,
+  .zoom-btn {
+    padding: 6px 8px;
+    min-height: 32px;
+  }
+
+  // Stack some sections on very small screens
+  .toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 60px;
+    padding: 8px 10px;
+  }
+}
+
+// Focus states for accessibility
+.toolbar button:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+// Animation for state changes
+.toolbar-btn,
+.device-btn,
+.toggle-btn,
+.panel-btn {
+  transition: all 0.2s ease;
+}

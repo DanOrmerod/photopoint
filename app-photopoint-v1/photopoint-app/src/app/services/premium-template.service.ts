@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { TemplateBuilderService, TemplateConfig } from './template-builder.service';
-import { Template } from './template.service';
+import { Template } from '../models';
 import { ThemeService } from './theme.service';
 
 /**

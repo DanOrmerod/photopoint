@@ -1,17 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-
-export interface NotificationMessage {
-  id: string;
-  type: 'success' | 'warning' | 'error' | 'info';
-  title?: string;
-  message: string;
-  duration?: number; // in milliseconds, 0 for permanent
-  actions?: Array<{
-    label: string;
-    action: () => void;
-    primary?: boolean;
-  }>;
-}
+import { NotificationMessage } from '../models';
 
 @Injectable({
   providedIn: 'root'

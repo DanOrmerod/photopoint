@@ -2,7 +2,8 @@ import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { WebsiteService, Page, Website } from '../../services/website.service';
+import { WebsiteService } from '../../services/website.service';
+import { Website, WebsitePage, Page } from '../../models';
 
 interface DesignBlock {
   id: string;
@@ -32,7 +33,7 @@ export class PageEditorComponent implements OnInit {
   websiteId = signal<string>('');
   pageId = signal<string>('');
   website = signal<Website | null>(null);
-  page = signal<Page | null>(null);
+  page = signal<WebsitePage | null>(null);
   loading = signal(true);
   error = signal<string>('');
   isSaving = signal(false);
@@ -94,7 +95,7 @@ export class PageEditorComponent implements OnInit {
         slug: page.slug,
         metaTitle: page.metaDescription, // Note: backend has metaTitle but model uses metaDescription
         metaDescription: page.metaDescription,
-        status: page.isPublished ? 'published' : 'draft'
+        status: page.status === 'published' ? 'published' : 'draft'
       });
       
     } catch (error) {

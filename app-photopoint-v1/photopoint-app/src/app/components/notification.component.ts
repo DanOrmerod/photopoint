@@ -1,6 +1,7 @@
 import { Component, inject, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { NotificationService, NotificationMessage } from '../services/notification.service';
+import { NotificationService } from '../services/notification.service';
+import { NotificationMessage } from '../models';
 
 @Component({
   selector: 'app-notification',

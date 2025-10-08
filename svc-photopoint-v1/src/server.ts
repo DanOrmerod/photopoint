@@ -13,8 +13,8 @@ import { logger } from './utils/logger';
 // Import routes
 import authRoutes from './routes/auth';
 import oauthRoutes from './routes/oauth';
-import photoRoutes from './routes/photos';
-import websiteRoutes from './routes/websites';
+import photoRoutes from './routes/photo';
+import websiteRoutes from './routes/website';
 import mediaRoutes from './routes/media';
 import mockRoutes from './routes/mock';
 import systemRoutes from './routes/system';
@@ -22,6 +22,9 @@ import systemRoutes from './routes/system';
 
 // Import services
 import { blobStorageService } from './services/blobStorageService';
+
+// Import error handling
+import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -74,8 +77,8 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/auth', oauthRoutes);
-app.use('/api/v1/photos', photoRoutes);
-app.use('/api/v1/websites', websiteRoutes);
+app.use('/api/v1/photo', photoRoutes);
+app.use('/api/v1/website', websiteRoutes);
 app.use('/api/v1/media', mediaRoutes);
 app.use('/api/v1/mock', mockRoutes);
 app.use('/api/v1/system', systemRoutes);
@@ -99,7 +102,8 @@ app.get('/', (req: Request, res: Response) => {
     endpoints: {
       health: '/health',
       api: '/api/v1',
-      photos: '/api/v1/photos',
+      website: '/api/v1/website',
+      photo: '/api/v1/photo',
       auth: '/api/v1/auth',
       oauth: {
         google: '/api/v1/auth/google',
@@ -111,13 +115,7 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Error handling middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  logger.error('Error:', err.message);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
-});
+app.use(errorHandler);
 
 // 404 handler
 app.use('*', (req: Request, res: Response) => {

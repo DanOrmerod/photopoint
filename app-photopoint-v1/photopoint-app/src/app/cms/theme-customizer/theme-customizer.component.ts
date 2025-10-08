@@ -1,7 +1,8 @@
 import { Component, signal, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ThemeService, Theme } from '../../services/theme.service';
+import { ThemeService } from '../../services/theme.service';
+import { Theme } from '../../models';
 
 @Component({
   selector: 'app-theme-customizer',

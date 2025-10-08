@@ -2,40 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
-
-export interface Photo {
-  id: string;
-  filename: string;
-  originalName: string;
-  mimeType: string;
-  size: number;
-  url: string;
-  thumbnailUrl: string;
-  uploadedAt: Date;
-  userId: string;
-  metadata?: {
-    width: number;
-    height: number;
-    camera?: string;
-    location?: string;
-    tags?: string[];
-  };
-}
-
-// Updated to match new API response format
-export interface UploadResponse {
-  // API now returns direct file object or { error: 'message' }
-  id?: string;
-  filename?: string;
-  originalName?: string;
-  mimeType?: string;
-  size?: number;
-  url?: string;
-  thumbnailUrl?: string;
-  uploadedAt?: Date;
-  userId?: string;
-  error?: string; // Error format: { error: 'message' }
-}
+import { Photo, UploadResponse } from '../models';
 
 @Injectable({
   providedIn: 'root'

@@ -106,6 +106,8 @@
         </div>
       </div>
 
+      <!-- Template selection disabled until template system is fully implemented -->
+      <!--
       <div class="form-group">
         <label>Choose a Template</label>
         <p class="field-description">
@@ -135,6 +137,7 @@
           </div>
         }
       </div>
+      -->
 
       <div class="form-actions">
         <button
@@ -169,11 +172,13 @@
     </div>
   }
 
-  <!-- Template Selector Overlay -->
+  <!-- Template Selector Overlay - Disabled until template system is implemented -->
+  <!--
   @if (showingTemplateSelector()) {
     <app-template-selector
       (templateSelected)="onTemplateSelected($event)"
       (close)="hideTemplateSelector()"
     ></app-template-selector>
   }
+  -->
 </div>

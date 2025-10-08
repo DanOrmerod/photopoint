@@ -1,8 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-
-export interface ApiError {
-  error: string;
-}
+import { ApiError } from '../models';
 
 export class ApiErrorHandler {
   /**

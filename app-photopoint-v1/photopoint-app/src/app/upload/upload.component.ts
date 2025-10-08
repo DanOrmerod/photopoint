@@ -2,7 +2,8 @@ import { Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { PhotoService, UploadResponse } from '../services/photo.service';
+import { PhotoService } from '../services/photo.service';
+import { UploadResponse } from '../models';
 
 export interface PhotoUpload {
   file: File;

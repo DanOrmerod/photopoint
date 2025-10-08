@@ -119,7 +119,7 @@ export class WebsiteViewerComponent implements OnInit {
 
       // Get all pages for the website
       const pages = await this.websiteService.getPages(website.id);
-      const publishedPages = pages.filter(p => p.isPublished);
+      const publishedPages = pages.filter(p => p.status === 'published');
 
       if (publishedPages.length === 0) {
         this.error.set('No published pages found');

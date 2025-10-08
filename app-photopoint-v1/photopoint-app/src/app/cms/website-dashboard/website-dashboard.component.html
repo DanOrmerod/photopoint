@@ -138,8 +138,8 @@
                       @if (page.isHomePage) {
                         <span class="badge home-badge">Home</span>
                       }
-                      <span class="badge" [class]="page.isPublished ? 'published-badge' : 'draft-badge'">
-                        {{ page.isPublished ? 'Published' : 'Draft' }}
+                      <span class="badge" [class]="page.status === 'published' ? 'published-badge' : 'draft-badge'">
+                        {{ page.status === 'published' ? 'Published' : 'Draft' }}
                       </span>
                     </div>
                   </div>

@@ -3,10 +3,10 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { WebsiteService } from '../../services/website.service';
-import { ThemeService, Theme } from '../../services/theme.service';
+import { ThemeService } from '../../services/theme.service';
 import { AuthService } from '../../auth/auth.service';
-import { Page, Website } from '../../services/website.service';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Website, WebsitePage, Page } from '../../models';
 
 // Import all block components
 import {
@@ -65,7 +65,7 @@ export class VisualDesignerComponent implements OnInit {
 
   // Signals
   website = signal<Website | null>(null);
-  page = signal<Page | null>(null);
+  page = signal<WebsitePage | null>(null);
   designBlocks = signal<DesignBlock[]>([]);
   selectedBlockId = signal<string | null>(null);
   editingBlockId = signal<string | null>(null);
@@ -134,11 +134,11 @@ export class VisualDesignerComponent implements OnInit {
       // Parse blocks from page content
       let blocks: DesignBlock[] = [];
       
-      if (page.content) {
+      if ((page as any).content) {
         try {
           // Handle different content formats
-          if (typeof page.content === 'string') {
-            const parsedContent = JSON.parse(page.content);
+          if (typeof (page as any).content === 'string') {
+            const parsedContent = JSON.parse((page as any).content);
             
             if (parsedContent.blocks && Array.isArray(parsedContent.blocks)) {
               blocks = parsedContent.blocks.map((block: any, index: number) => {
@@ -155,11 +155,11 @@ export class VisualDesignerComponent implements OnInit {
                 return block;
               });
             }
-          } else if (Array.isArray(page.content)) {
-            blocks = page.content;
-          } else if (typeof page.content === 'object' && page.content !== null) {
-            const contentObj = page.content as any;
-            blocks = contentObj.blocks || contentObj.content || [page.content];
+          } else if (Array.isArray((page as any).content)) {
+            blocks = (page as any).content;
+          } else if (typeof (page as any).content === 'object' && (page as any).content !== null) {
+            const contentObj = (page as any).content as any;
+            blocks = contentObj.blocks || contentObj.content || [(page as any).content];
           }
         } catch (e) {
           console.error('Error parsing page content:', e);

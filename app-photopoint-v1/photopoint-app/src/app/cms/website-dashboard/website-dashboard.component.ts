@@ -2,9 +2,10 @@ import { Component, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { WebsiteService } from '../../services/website.service';
-import { TemplateService, Template } from '../../services/template.service';
+import { TemplateService } from '../../services/template.service';
+import { ConfirmationService } from '../../services/confirmation.service';
+import { Website, WebsitePage, Template } from '../../models';
 import { TemplateSelectorComponent } from '../template-selector/template-selector.component';
-import { Website, Page } from '../../services/website.service';
 import { environment } from '../../../environments/environment';
 import { ApiErrorHandler } from '../../utils/api-error-handler';
 
@@ -18,7 +19,7 @@ import { ApiErrorHandler } from '../../utils/api-error-handler';
 export class WebsiteDashboardComponent implements OnInit {
   environment = environment;
   website = signal<Website | null>(null);
-  pages = signal<Page[]>([]);
+  pages = signal<WebsitePage[]>([]);
   loading = signal(false);
   pagesLoading = signal(false);
   publishingLoading = signal(false);
@@ -32,6 +33,7 @@ export class WebsiteDashboardComponent implements OnInit {
   constructor(
     private websiteService: WebsiteService,
     private templateService: TemplateService,
+    private confirmationService: ConfirmationService,
     private route: ActivatedRoute,
     private router: Router
   ) {}
@@ -145,7 +147,7 @@ export class WebsiteDashboardComponent implements OnInit {
     window.open(previewUrl, '_blank');
   }
 
-  getHomePage(): Page | null {
+  getHomePage(): WebsitePage | null {
     const pages = this.pages();
     return pages.find(page => page.isHomePage) || pages.find(page => page.slug === 'home') || pages[0] || null;
   }
@@ -167,14 +169,22 @@ export class WebsiteDashboardComponent implements OnInit {
 
   async createNewPage() {
     try {
+      console.log('Creating new page...');
       const newPage = await this.websiteService.createPage(this.websiteId, {
         title: 'New Page',
-        slug: 'new-page-' + Date.now(),
-        content: '<h1>New Page</h1><p>Add your content here...</p>'
+        slug: 'new-page-' + Date.now()
       });
+      console.log('Page created successfully:', newPage);
+      
+      // Reload pages to update the UI
+      this.loadPages();
+      
+      // Navigate to page editor
       this.router.navigate(['/websites', this.websiteId, 'pages', newPage.id, 'edit']);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create page:', error);
+      // You could add a toast notification here
+      alert('Failed to create page: ' + (error.message || 'Unknown error'));
     }
   }
 
@@ -190,13 +200,21 @@ export class WebsiteDashboardComponent implements OnInit {
   }
 
   async deletePage(pageId: string) {
-    if (confirm('Are you sure you want to delete this page?')) {
-      try {
-        await this.websiteService.deletePage(this.websiteId, pageId);
-        this.loadPages(); // Refresh pages list
-      } catch (error) {
-        console.error('Failed to delete page:', error);
-      }
+    const page = this.pages().find(p => p.id === pageId);
+    const pageName = page ? page.title : 'this page';
+    
+    const confirmed = await this.confirmationService.confirmDelete(pageName, 'page');
+    
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await this.websiteService.deletePage(this.websiteId, pageId);
+      this.loadPages(); // Refresh pages list
+    } catch (error) {
+      console.error('Failed to delete page:', error);
+      // You could add a toast notification here for the error
     }
   }
 

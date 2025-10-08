@@ -1,7 +1,8 @@
 import { Component, EventEmitter, Output, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TemplateService, Template } from '../../services/template.service';
+import { TemplateService } from '../../services/template.service';
+import { Template } from '../../models';
 
 @Component({
   selector: 'app-template-selector',

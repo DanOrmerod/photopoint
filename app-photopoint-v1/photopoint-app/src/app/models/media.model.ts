@@ -34,28 +34,8 @@ export interface MediaFolder {
   fileCount: number;
 }
 
-// Legacy Photo interface for backward compatibility - maps to MediaFile
-export interface Photo {
-  id: string;
-  filename: string; // Maps to fileName
-  originalName: string;
-  mimeType: string;
-  size: number; // Maps to fileSize
-  url: string; // Maps to blobUrl
-  thumbnailUrl?: string;
-  uploadedAt: Date; // Maps to createdAt
-  userId: string;
-  metadata?: {
-    width?: number;
-    height?: number;
-    camera?: string;
-    location?: string;
-    tags?: string[];
-  };
-}
-
-// Utility function to convert MediaFile to Photo for backward compatibility
-export function mediaFileToPhoto(mediaFile: MediaFile): Photo {
+// Utility function to convert MediaFile to Photo for backward compatibility  
+export function mediaFileToPhoto(mediaFile: MediaFile): any {
   return {
     id: mediaFile.id,
     filename: mediaFile.fileName,
@@ -75,7 +55,7 @@ export function mediaFileToPhoto(mediaFile: MediaFile): Photo {
 }
 
 // Utility function to convert Photo to MediaFile
-export function photoToMediaFile(photo: Photo): Partial<MediaFile> {
+export function photoToMediaFile(photo: any): Partial<MediaFile> {
   return {
     id: photo.id,
     fileName: photo.filename,

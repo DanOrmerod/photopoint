@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-export interface OAuthProviders {
+interface OAuthProviders {
   google: boolean;
   facebook: boolean;
   apple: boolean;

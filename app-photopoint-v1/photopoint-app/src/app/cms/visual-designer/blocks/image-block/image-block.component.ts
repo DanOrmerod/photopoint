@@ -2,9 +2,10 @@ import { Component, Input, Output, EventEmitter, inject, signal, computed, OnDes
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseBlockData, BaseBlockComponent } from '../base-block.interface';
-import { PhotoService, Photo } from '../../../../services/photo.service';
+import { PhotoService } from '../../../../services/photo.service';
 import { MediaService } from '../../../../services/media.service';
 import { MediaFolder, MediaFile, getSecureMediaUrl, getSecureThumbnailUrl } from '../../../../models/media.model';
+import { Photo } from '../../../../models';
 import { switchMap, of, firstValueFrom } from 'rxjs';
 
 interface TextOverlay {
